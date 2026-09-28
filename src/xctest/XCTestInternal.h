@@ -76,6 +76,16 @@ XCT_EXPORT XCTestCase *_Nullable _XCTCurrentTestCase(void);
 /// Records the thread the test body runs on, which is the only thread whose
 /// declarations are allowed to absorb issues recorded on any thread.
 - (void)_xct_markPrimaryThread;
+/// Whether the caller is running on the thread the test body runs on. Only that
+/// thread can be unwound by a failed assertion, so a failure recorded anywhere
+/// else must not try.
+- (BOOL)_xct_isOnPrimaryThread;
+/// Records an issue without unwinding the test, for failures that are not part
+/// of the test body's own control flow: an expectation over-fulfilled or left
+/// unfulfilled by a callback, an async teardown, or another thread. Unwinding
+/// would abandon assertions that are still meaningful, and off the test's own
+/// thread there is no handler for the unwind at all.
+- (void)_xct_recordIssueWithoutUnwinding:(XCTIssue *)issue;
 @end
 
 @class XCTExpectedFailure;

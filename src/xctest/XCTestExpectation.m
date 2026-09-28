@@ -29,6 +29,8 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
     NSUInteger _expectedFulfillmentCount;
     BOOL _assertForOverFulfill;
 
+    __weak XCTestCase *_owningTestCase;
+
     NSLock *_lock;
     NSUInteger _fulfillmentCount;
     uint64_t _satisfactionSequence;
@@ -46,6 +48,11 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
         _assertForOverFulfill = YES;
         _reportsAutomaticFailures = YES;
         _lock = [NSLock new];
+        // Remember who created the expectation. A duplicate or missing callback
+        // is a bug in the test that owns the expectation, and the thread that
+        // happens to make the call is often a background queue that has no
+        // current test case of its own.
+        _owningTestCase = _XCTCurrentTestCase();
     }
     return self;
 }
@@ -141,14 +148,30 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
 {
     // An over-fulfillment usually means a duplicate callback, so it is the kind
     // of bug worth reporting even though the wait itself will succeed.
-    XCTestCase *testCase = _XCTCurrentTestCase();
+    XCTestCase *testCase = [self _issueReportingTestCase];
     if (testCase == nil) {
         return;
     }
-    [testCase recordIssue:[[XCTIssue alloc]
-                              initWithType:XCTIssueTypeTestFailure
-                         compactDescription:@"API violation - multiple calls to -fulfill"
-                                    severity:XCTIssueSeverityError]];
+    // No unwind: the duplicate came from a callback, so there is no assertion
+    // on this thread to abandon, and the callback may well be on a thread that
+    // has no handler for an unwind at all.
+    [testCase _xct_recordIssueWithoutUnwinding:[[XCTIssue alloc]
+                                                  initWithType:XCTIssueTypeTestFailure
+                                             compactDescription:@"API violation - multiple calls to -fulfill"
+                                                        severity:XCTIssueSeverityError]];
+}
+
+// The test that a problem with this expectation belongs to. The owner wins over
+// the thread's current test case, because -fulfill and the expiry of a wait are
+// both routinely called from background queues that have no current test case,
+// and a bug that vanishes when it happens off the test thread is not reported.
+- (XCTestCase *)_issueReportingTestCase
+{
+    XCTestCase *owning = _owningTestCase;
+    if (owning != nil) {
+        return owning;
+    }
+    return _XCTCurrentTestCase();
 }
 
 #pragma mark - Waiter view
@@ -206,13 +229,16 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
     if (!shouldReport) {
         return;
     }
-    XCTestCase *testCase = _XCTCurrentTestCase();
-    [testCase recordIssue:[[XCTIssue alloc]
-                              initWithType:XCTIssueTypeTestFailure
-                         compactDescription:[NSString stringWithFormat:
-                                                       @"Asynchronous wait failed: %@",
-                                                       self.expectationDescription ?: @"(no description)"]
-                                    severity:XCTIssueSeverityError]];
+    XCTestCase *testCase = [self _issueReportingTestCase];
+    if (testCase == nil) {
+        return;
+    }
+    [testCase _xct_recordIssueWithoutUnwinding:[[XCTIssue alloc]
+                                                  initWithType:XCTIssueTypeTestFailure
+                                             compactDescription:[NSString stringWithFormat:
+                                                                   @"Asynchronous wait failed: %@",
+                                                                   self.expectationDescription ?: @"(no description)"]
+                                                severity:XCTIssueSeverityError]];
 }
 
 - (NSString *)description

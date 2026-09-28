@@ -149,6 +149,15 @@
     // unwind: a test written to document a known bug would abort mid-way and be
     // reported as never having finished.
     if (!absorbed && !self.continueAfterFailure && issue.isFailure) {
+        // Only the test's own thread can be unwound. The handler for this
+        // exception is the @try around the test body, so raising from any other
+        // thread unwinds a stack that has no handler for it: for a dispatch
+        // queue or a thread already returned, that takes the whole process down
+        // instead of stopping the test. The issue is already recorded either
+        // way, so the test still fails.
+        if (![self _xct_isOnPrimaryThread]) {
+            return;
+        }
         [[[_XCTestCaseInterruptionException alloc] initWithName:_XCTInternalUnwindExceptionName
                                                        reason:@"Failed assertion"
                                                      userInfo:nil] raise];
@@ -587,9 +596,24 @@
     }
 }
 
+- (void)_xct_recordIssueWithoutUnwinding:(XCTIssue *)issue
+{
+    // Same funnel as -recordIssue:, minus the unwind: the run still counts the
+    // issue and still consults the expected-failure declarations, but the test
+    // keeps running. The test decides for itself whether to keep going, and a
+    // callback-driven failure has no assertion on this thread to abandon.
+    XCTestRun *run = self.testRun ?: [XCTestCaseRun testRunWithTest:self];
+    [run _xct_recordIssue:issue];
+}
+
 - (void)_xct_markPrimaryThread
 {
     _primaryThread = pthread_self();
+}
+
+- (BOOL)_xct_isOnPrimaryThread
+{
+    return pthread_equal(_primaryThread, pthread_self()) != 0;
 }
 
 @end
