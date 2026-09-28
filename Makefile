@@ -379,7 +379,14 @@ check-framework: $(XCTEST_FW_STAMP)
 check-expectations: $(XCTEST_FW_STAMP)
 	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh
 
-test: check-link smoke check-framework check-expectations
+# The source context is the value type every failure passes through, and a
+# broken one still compiles, still links, and still leaves an issue with a
+# context attached -- just without the file and line of the failure. Nothing
+# else in the tree would notice.
+check-source-context: $(XCTEST_FW_STAMP)
+	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh
+
+test: check-link smoke check-framework check-expectations check-source-context
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd is already usable, and regenerating it is only
@@ -415,6 +422,10 @@ clangd-config:
 # tree that outlived the project edit that should have invalidated it is reused
 # silently, and a source dropped from the target keeps its .o. The build
 # directory is rebuilt from nothing, which is slower and is the point.
+#
+# The three checks after the build are &&-chained, not ;-chained. With a ';' the
+# recipe's exit status is the last command's, so a failing check-expectations.sh
+# followed by a passing check-source-context.sh would report success.
 check-xcode:
 	@command -v xcodebuild >/dev/null 2>&1 || \
 		{ echo "check-xcode: xcodebuild not found; install Xcode or use 'make test'"; exit 1; }
@@ -428,8 +439,9 @@ check-xcode:
 	rm -rf "build/xcode-$$dir" "build/xcode-obj/$$dir"; \
 	xcodebuild -project XCTest.xcodeproj -target XCTest -configuration "$$xc" build \
 		| grep -E '^(error|warning):|^\*\* BUILD' || { echo "check-xcode: xcodebuild failed"; exit 1; }; \
-	bash tools/framework-smoke.sh "build/xcode-$$dir/XCTest.framework" "$(SDK)" "$(CC)"; \
-	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh
+	bash tools/framework-smoke.sh "build/xcode-$$dir/XCTest.framework" "$(SDK)" "$(CC)" && \
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -444,4 +456,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context test clangd-config check-xcode install clean

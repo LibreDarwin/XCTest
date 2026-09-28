@@ -46,135 +46,430 @@ static NSArray<NSNumber *> *XCTCaptureCallStack(void)
     return frames;
 }
 
-static NSUInteger XCTTopFrame(NSArray<NSNumber *> *stack)
+/// Resolves a return address to its image and symbol via dladdr.
+///
+/// The runtime carries no line table, so a resolved symbol has no
+/// XCTSourceCodeLocation: the address says which function it is in, and nothing
+/// more. That is why the framework's own call sites pass their __LINE__ through
+/// the assertion path instead -- that is the only place a real line number
+/// comes from.
+static XCTSourceCodeSymbolInfo *_Nullable XCTSymbolInfoForAddress(uintptr_t address)
 {
-    NSNumber *top = stack.count > 0 ? stack[0] : nil;
-    return top != nil ? top.unsignedIntegerValue : 0;
-}
-
-/// Resolves a return address to an image name and symbol via dladdr. The
-/// runtime carries no line table, so lineNumber is reported as unknown rather
-/// than guessed; the framework's own call sites pass their __LINE__ through the
-/// assertion path instead, which is where the real line number comes from.
-static void XCTResolveLocation(uintptr_t location,
-                               NSString *__strong _Nullable *outFile,
-                               NSString *__strong _Nullable *outSymbol)
-{
-    *outFile = nil;
-    *outSymbol = nil;
-    if (location == 0) {
-        return;
+    if (address == 0) {
+        return nil;
     }
-
     Dl_info info;
-    if (dladdr((const void *)location, &info) == 0) {
-        return;
+    if (dladdr((const void *)address, &info) == 0) {
+        return nil;
     }
-    if (info.dli_fname != NULL) {
-        *outFile = [NSString stringWithUTF8String:info.dli_fname];
+    if (info.dli_fname == NULL) {
+        // dladdr can succeed with no image name for a main executable built
+        // without it. A symbol without an image is not much use, but it is
+        // still the best answer available, so the name is reported as empty
+        // rather than the whole symbol discarded.
+        return [[XCTSourceCodeSymbolInfo alloc] initWithImageName:@""
+                                                      symbolName:info.dli_sname != NULL
+                                                                    ? @(info.dli_sname)
+                                                                    : @""
+                                                        location:nil];
     }
-    if (info.dli_sname != NULL) {
-        *outSymbol = [NSString stringWithUTF8String:info.dli_sname];
-    }
+    return [[XCTSourceCodeSymbolInfo alloc] initWithImageName:@(info.dli_fname)
+                                                  symbolName:info.dli_sname != NULL
+                                                                ? @(info.dli_sname)
+                                                                : @""
+                                                    location:nil];
 }
 
 XCT_EXPORT XCTSourceCodeContext *_XCTCurrentSourceCodeContext(void)
 {
-    NSArray<NSNumber *> *stack = XCTCaptureCallStack();
-    return [[XCTSourceCodeContext alloc] initWithLocation:XCTTopFrame(stack)];
+    return [[XCTSourceCodeContext alloc] init];
 }
 
-#pragma mark - XCTSourceCodeContext
+#pragma mark - XCTSourceCodeLocation
 
-static NSString *const XCTContextLocationKey = @"location";
-static NSString *const XCTContextFilePathKey = @"filePath";
-static NSString *const XCTContextLineNumberKey = @"lineNumber";
-static NSString *const XCTContextColumnNumberKey = @"columnNumber";
-static NSString *const XCTContextSymbolInfoKey = @"symbolInfo";
-static NSString *const XCTContextCallStackKey = @"callStack";
+static NSString *const XCTLocationFileURLKey = @"fileURL";
+static NSString *const XCTLocationLineNumberKey = @"lineNumber";
 
-@implementation XCTSourceCodeContext {
-    NSUInteger _location;
-    NSString *_filePath;
-    NSUInteger _lineNumber;
-    NSUInteger _columnNumber;
-    NSString *_symbolInfo;
-    NSArray<NSNumber *> *_callStack;
+@implementation XCTSourceCodeLocation {
+    NSURL *_fileURL;
+    NSInteger _lineNumber;
 }
 
-/// Builds a context from a call site the caller already knows exactly.
-///
-/// The public initializer takes a stack address and resolves it, which is the
-/// right thing for a failure discovered by walking a backtrace. An assertion
-/// is the other case: __FILE__ and __LINE__ are literals at the call site, and
-/// resolving an address back to that same line would be a slower, less accurate
-/// way of learning something already known. Routing through the designated
-/// initializer anyway keeps one construction path and one set of invariants.
-+ (instancetype)xct_contextWithFilePath:(NSString *)filePath
-                             lineNumber:(NSUInteger)lineNumber
-{
-    XCTSourceCodeContext *context = [[self alloc] initWithLocation:0];
-    context->_filePath = [filePath copy];
-    context->_lineNumber = lineNumber;
-    return context;
-}
-
-- (instancetype)initWithLocation:(NSUInteger)location
+- (instancetype)initWithFileURL:(NSURL *)fileURL lineNumber:(NSInteger)lineNumber
 {
     self = [super init];
     if (self) {
-        _location = location;
-        _callStack = XCTCaptureCallStack();
-        NSString *file = nil;
-        NSString *symbol = nil;
-        XCTResolveLocation(location, &file, &symbol);
-        _filePath = file;
-        _symbolInfo = symbol;
+        _fileURL = [fileURL copy];
+        _lineNumber = lineNumber;
     }
     return self;
 }
 
-/// Coding initializer. Decodes into locals and then routes through the
-/// designated initializer, so the object is never left half-built and the
-/// backtrace is not needlessly recaptured.
+/// A path, not a URL. __FILE__ is a path and the assertion path has nothing
+/// else, so refusing to build a location from one would leave every assertion
+/// without a file. The URL is built relative to nothing in particular: it is a
+/// file:// URL carrying the path the compiler was given, which is the same
+/// string the old -filePath property returned, and no attempt is made to
+/// resolve symlinks or absolutise it, because the caller may well be reporting a
+/// file that no longer exists on this machine.
+- (instancetype)initWithFilePath:(NSString *)filePath lineNumber:(NSInteger)lineNumber
+{
+    return [self initWithFileURL:[NSURL fileURLWithPath:filePath]
+                      lineNumber:lineNumber];
+}
+
 - (instancetype)initWithCoder:(NSCoder *)coder
 {
-    NSUInteger location = [coder decodeIntegerForKey:XCTContextLocationKey];
-    self = [self initWithLocation:location];
-    if (self) {
-        _filePath = [[coder decodeObjectOfClass:[NSString class]
-                                          forKey:XCTContextFilePathKey] copy];
-        _lineNumber = [coder decodeIntegerForKey:XCTContextLineNumberKey];
-        _columnNumber = [coder decodeIntegerForKey:XCTContextColumnNumberKey];
-        _symbolInfo = [[coder decodeObjectOfClass:[NSString class]
-                                           forKey:XCTContextSymbolInfoKey] copy];
-
-        NSSet *stackClasses = [NSSet setWithObjects:[NSArray class], [NSNumber class], nil];
-        _callStack = [[coder decodeObjectOfClasses:stackClasses
-                                             forKey:XCTContextCallStackKey] copy]
-                     ?: @[];
-    }
-    return self;
+    // Decoded into locals and routed through the designated initializer, so the
+    // object is never left half-built.
+    NSURL *fileURL = [coder decodeObjectOfClass:[NSURL class] forKey:XCTLocationFileURLKey];
+    NSInteger lineNumber = [coder decodeIntegerForKey:XCTLocationLineNumberKey];
+    return [self initWithFileURL:fileURL lineNumber:lineNumber];
 }
 
 - (void)encodeWithCoder:(NSCoder *)coder
 {
-    [coder encodeInteger:(NSInteger)_location forKey:XCTContextLocationKey];
-    [coder encodeObject:_filePath forKey:XCTContextFilePathKey];
-    [coder encodeInteger:(NSInteger)_lineNumber forKey:XCTContextLineNumberKey];
-    [coder encodeInteger:(NSInteger)_columnNumber forKey:XCTContextColumnNumberKey];
-    [coder encodeObject:_symbolInfo forKey:XCTContextSymbolInfoKey];
-    [coder encodeObject:_callStack forKey:XCTContextCallStackKey];
+    [coder encodeObject:_fileURL forKey:XCTLocationFileURLKey];
+    [coder encodeInteger:_lineNumber forKey:XCTLocationLineNumberKey];
 }
 
-- (NSUInteger)location { return _location; }
-- (NSString *)filePath { return _filePath; }
-- (NSUInteger)lineNumber { return _lineNumber; }
-- (NSUInteger)columnNumber { return _columnNumber; }
-- (NSString *)symbolInfo { return _symbolInfo; }
-- (NSArray<NSNumber *> *)callStack { return _callStack; }
+- (NSURL *)fileURL { return _fileURL; }
+- (NSInteger)lineNumber { return _lineNumber; }
 
-- (id)copyWithZone:(NSZone *)zone { return self; }
+- (BOOL)isEqual:(id)object
+{
+    if (self == object) {
+        return YES;
+    }
+    if (![object isKindOfClass:[XCTSourceCodeLocation class]]) {
+        return NO;
+    }
+    XCTSourceCodeLocation *other = object;
+    return _lineNumber == other->_lineNumber && (_fileURL == other->_fileURL || [_fileURL isEqual:other->_fileURL]);
+}
+
+- (NSUInteger)hash
+{
+    return _fileURL.hash ^ (NSUInteger)_lineNumber;
+}
+
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"%@:%ld", _fileURL.path ?: @"(none)", (long)_lineNumber];
+}
+
++ (BOOL)supportsSecureCoding { return YES; }
+
+@end
+
+#pragma mark - XCTSourceCodeSymbolInfo
+
+static NSString *const XCTSymbolImageNameKey = @"imageName";
+static NSString *const XCTSymbolSymbolNameKey = @"symbolName";
+static NSString *const XCTSymbolLocationKey = @"location";
+
+@implementation XCTSourceCodeSymbolInfo {
+    NSString *_imageName;
+    NSString *_symbolName;
+    XCTSourceCodeLocation *_location;
+}
+
+- (instancetype)initWithImageName:(NSString *)imageName
+                       symbolName:(NSString *)symbolName
+                         location:(XCTSourceCodeLocation *)location
+{
+    self = [super init];
+    if (self) {
+        _imageName = [imageName copy];
+        _symbolName = [symbolName copy];
+        _location = location;
+    }
+    return self;
+}
+
+- (instancetype)initWithCoder:(NSCoder *)coder
+{
+    NSString *imageName = [coder decodeObjectOfClass:[NSString class]
+                                              forKey:XCTSymbolImageNameKey];
+    NSString *symbolName = [coder decodeObjectOfClass:[NSString class]
+                                               forKey:XCTSymbolSymbolNameKey];
+    XCTSourceCodeLocation *location = [coder decodeObjectOfClass:[XCTSourceCodeLocation class]
+                                                          forKey:XCTSymbolLocationKey];
+    return [self initWithImageName:imageName symbolName:symbolName location:location];
+}
+
+- (void)encodeWithCoder:(NSCoder *)coder
+{
+    [coder encodeObject:_imageName forKey:XCTSymbolImageNameKey];
+    [coder encodeObject:_symbolName forKey:XCTSymbolSymbolNameKey];
+    [coder encodeObject:_location forKey:XCTSymbolLocationKey];
+}
+
+- (NSString *)imageName { return _imageName; }
+- (NSString *)symbolName { return _symbolName; }
+- (XCTSourceCodeLocation *)location { return _location; }
+
+- (BOOL)isEqual:(id)object
+{
+    if (self == object) {
+        return YES;
+    }
+    if (![object isKindOfClass:[XCTSourceCodeSymbolInfo class]]) {
+        return NO;
+    }
+    XCTSourceCodeSymbolInfo *other = object;
+    return (_imageName == other->_imageName || [_imageName isEqual:other->_imageName]) &&
+           (_symbolName == other->_symbolName || [_symbolName isEqual:other->_symbolName]) &&
+           (_location == other->_location || [_location isEqual:other->_location]);
+}
+
+- (NSUInteger)hash
+{
+    return _imageName.hash ^ _symbolName.hash;
+}
+
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"%@ in %@", _symbolName, _imageName];
+}
+
++ (BOOL)supportsSecureCoding { return YES; }
+
+@end
+
+#pragma mark - XCTSourceCodeFrame
+
+static NSString *const XCTFrameAddressKey = @"address";
+static NSString *const XCTFrameSymbolInfoKey = @"symbolInfo";
+
+/// A private code for dladdr failures, kept out of the XCTestErrorCode range:
+/// 0 and 1 are already XCTestErrorCodeTimeoutWhileWaiting and
+/// XCTestErrorCodeFailureWhileWaiting, and a symbolication failure reporting
+/// itself as either would be indistinguishable from a wait that failed.
+/// Private, because nothing in the public API promises a code here.
+static const NSInteger XCTSymbolicationErrorCode = 1000;
+
+static NSError *XCTSymbolicationError(uintptr_t address)
+{
+    return [NSError errorWithDomain:XCTestErrorDomain
+                               code:XCTSymbolicationErrorCode
+                           userInfo:@{
+                               NSLocalizedDescriptionKey: [NSString stringWithFormat:
+                                   @"no symbol information for address 0x%lx",
+                                   (unsigned long)address]
+                           }];
+}
+
+@implementation XCTSourceCodeFrame {
+    uint64_t _address;
+    XCTSourceCodeSymbolInfo *_symbolInfo;
+    // Set once -symbolInfoWithError: has run, so that a second call reports the
+    // first outcome rather than asking dladdr again. NOT encoded: it describes
+    // this process's attempt, and a decoded frame has made none.
+    BOOL _symbolicationAttempted;
+    NSError *_symbolicationError;
+}
+
+- (instancetype)initWithAddress:(uint64_t)address
+                    symbolInfo:(XCTSourceCodeSymbolInfo *)symbolInfo
+{
+    self = [super init];
+    if (self) {
+        _address = address;
+        _symbolInfo = symbolInfo;
+        // A symbol handed in is an answer, so the lazy path must not ask again.
+        _symbolicationAttempted = symbolInfo != nil;
+    }
+    return self;
+}
+
+- (instancetype)initWithAddress:(uint64_t)address
+{
+    return [self initWithAddress:address symbolInfo:nil];
+}
+
+- (instancetype)initWithCoder:(NSCoder *)coder
+{
+    uint64_t address = (uint64_t)[coder decodeInt64ForKey:XCTFrameAddressKey];
+    XCTSourceCodeSymbolInfo *symbolInfo = [coder decodeObjectOfClass:[XCTSourceCodeSymbolInfo class]
+                                                              forKey:XCTFrameSymbolInfoKey];
+    return [self initWithAddress:address symbolInfo:symbolInfo];
+}
+
+- (void)encodeWithCoder:(NSCoder *)coder
+{
+    [coder encodeInt64:(int64_t)_address forKey:XCTFrameAddressKey];
+    [coder encodeObject:_symbolInfo forKey:XCTFrameSymbolInfoKey];
+}
+
+- (uint64_t)address { return _address; }
+- (XCTSourceCodeSymbolInfo *)symbolInfo { return _symbolInfo; }
+- (NSError *)symbolicationError { return _symbolicationError; }
+
+- (XCTSourceCodeSymbolInfo *)symbolInfoWithError:(NSError **)outError
+{
+    if (!_symbolicationAttempted) {
+        _symbolicationAttempted = YES;
+        _symbolInfo = XCTSymbolInfoForAddress((uintptr_t)_address);
+        if (_symbolInfo == nil) {
+            _symbolicationError = XCTSymbolicationError((uintptr_t)_address);
+        }
+    }
+    if (outError != NULL) {
+        *outError = _symbolicationError;
+    }
+    return _symbolInfo;
+}
+
+- (BOOL)isEqual:(id)object
+{
+    if (self == object) {
+        return YES;
+    }
+    if (![object isKindOfClass:[XCTSourceCodeFrame class]]) {
+        return NO;
+    }
+    XCTSourceCodeFrame *other = object;
+    // Only the address, deliberately. A frame that has not been symbolicated is
+    // the same frame as one that has, and two frames equal if they are the same
+    // return address; whether this process has looked it up yet is not part of
+    // what the frame is. Including _symbolInfo would make equality depend on
+    // call order.
+    return _address == other->_address;
+}
+
+- (NSUInteger)hash { return (NSUInteger)_address; }
+
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"0x%llx", (unsigned long long)_address];
+}
+
++ (BOOL)supportsSecureCoding { return YES; }
+
+@end
+
+#pragma mark - XCTSourceCodeContext
+
+static NSString *const XCTContextCallStackKey = @"callStack";
+static NSString *const XCTContextLocationKey = @"location";
+
+/// The current thread's return addresses, innermost first, with the framework's
+/// own frames removed.
+static NSArray<NSNumber *> *XCTCaptureCallStack(void);
+
+@implementation XCTSourceCodeContext {
+    NSArray<XCTSourceCodeFrame *> *_callStack;
+    XCTSourceCodeLocation *_location;
+}
+
+/// A context for a call site the caller already knows exactly.
+///
+/// The public initializers all describe a place by resolving a stack, which is
+/// right for a failure found by walking a backtrace and wrong for an assertion:
+/// __FILE__ and __LINE__ are literals at the call site, and the address of the
+/// assertion helper cannot be resolved back to that line -- the runtime has no
+/// line table, so it would report a symbol and an unknown line where the real
+/// line number was already in hand. So the location is built from the literals
+/// and the stack is left to the initializer, which captures the current thread
+/// the same way it does for any other context.
++ (instancetype)xct_contextWithFilePath:(NSString *)filePath
+                             lineNumber:(NSUInteger)lineNumber
+{
+    XCTSourceCodeLocation *location =
+        [[XCTSourceCodeLocation alloc] initWithFilePath:filePath
+                                             lineNumber:(NSInteger)lineNumber];
+    return [[XCTSourceCodeContext alloc] initWithLocation:location];
+}
+
+- (instancetype)initWithCallStack:(NSArray<XCTSourceCodeFrame *> *)callStack
+                         location:(XCTSourceCodeLocation *)location
+{
+    self = [super init];
+    if (self) {
+        _callStack = [callStack copy] ?: @[];
+        _location = location;
+    }
+    return self;
+}
+
+- (instancetype)initWithCallStackAddresses:(NSArray<NSNumber *> *)callStackAddresses
+                                  location:(XCTSourceCodeLocation *)location
+{
+    NSMutableArray<XCTSourceCodeFrame *> *frames =
+        [NSMutableArray arrayWithCapacity:callStackAddresses.count];
+    for (NSNumber *address in callStackAddresses) {
+        // Resolved now rather than left for -symbolInfoWithError:, and that is
+        // a deliberate trade of work for fidelity. A frame is a return address,
+        // and an address only means something while the image it points into is
+        // still mapped and named: a test bundle that has been unloaded, or a
+        // dylib renamed on disk since, resolves to nothing or to the wrong name
+        // once the failure has already happened. Symbolication that runs when
+        // the stack is captured names the code as it was at the moment the test
+        // failed, which is the whole reason the failure is being recorded.
+        //
+        // The cost is one dladdr per frame, on a stack that is short, and only
+        // on the paths that build a context at all.
+        [frames addObject:[[XCTSourceCodeFrame alloc]
+            initWithAddress:(uint64_t)address.unsignedLongLongValue
+                  symbolInfo:XCTSymbolInfoForAddress((uintptr_t)address.unsignedLongLongValue)]];
+    }
+    return [self initWithCallStack:frames location:location];
+}
+
+- (instancetype)initWithLocation:(XCTSourceCodeLocation *)location
+{
+    return [self initWithCallStackAddresses:XCTCaptureCallStack() location:location];
+}
+
+- (instancetype)init
+{
+    return [self initWithLocation:nil];
+}
+
+- (instancetype)initWithCoder:(NSCoder *)coder
+{
+    // Decoded into locals and routed through the designated initializer, so the
+    // object is never left half-built and the backtrace is not recaptured.
+    NSSet *classes = [NSSet setWithObjects:[NSArray class], [XCTSourceCodeFrame class], nil];
+    NSArray<XCTSourceCodeFrame *> *callStack =
+        [coder decodeObjectOfClasses:classes forKey:XCTContextCallStackKey];
+    XCTSourceCodeLocation *location = [coder decodeObjectOfClass:[XCTSourceCodeLocation class]
+                                                          forKey:XCTContextLocationKey];
+    return [self initWithCallStack:callStack location:location];
+}
+
+- (void)encodeWithCoder:(NSCoder *)coder
+{
+    [coder encodeObject:_callStack forKey:XCTContextCallStackKey];
+    [coder encodeObject:_location forKey:XCTContextLocationKey];
+}
+
+- (NSArray<XCTSourceCodeFrame *> *)callStack { return _callStack; }
+- (XCTSourceCodeLocation *)location { return _location; }
+
+- (BOOL)isEqual:(id)object
+{
+    if (self == object) {
+        return YES;
+    }
+    if (![object isKindOfClass:[XCTSourceCodeContext class]]) {
+        return NO;
+    }
+    XCTSourceCodeContext *other = object;
+    return (_location == other->_location || [_location isEqual:other->_location]) &&
+           [_callStack isEqualToArray:other->_callStack];
+}
+
+- (NSUInteger)hash
+{
+    return _location.hash ^ _callStack.count;
+}
+
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"%@ %lu frames", _location, (unsigned long)_callStack.count];
+}
 
 + (BOOL)supportsSecureCoding { return YES; }
 
