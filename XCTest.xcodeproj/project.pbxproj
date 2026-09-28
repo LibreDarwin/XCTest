@@ -1,0 +1,591 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1A2B3C4D000000000000005F /* xcresult.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000018 /* xcresult.c */; };
+		1A2B3C4D0000000000000060 /* bkeyed.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000019 /* bkeyed.c */; };
+		1A2B3C4D0000000000000061 /* xccov.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000001A /* xccov.c */; };
+		1A2B3C4D0000000000000062 /* xcresult.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000018 /* xcresult.c */; };
+		1A2B3C4D0000000000000063 /* xcresulttool.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000001B /* xcresulttool.c */; };
+		1A2B3C4D0000000000000064 /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000021 /* debug.c */; };
+		1A2B3C4D0000000000000065 /* entropy_common.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000022 /* entropy_common.c */; };
+		1A2B3C4D0000000000000066 /* error_private.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000023 /* error_private.c */; };
+		1A2B3C4D0000000000000067 /* fse_decompress.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000024 /* fse_decompress.c */; };
+		1A2B3C4D0000000000000068 /* pool.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000025 /* pool.c */; };
+		1A2B3C4D0000000000000069 /* threading.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000026 /* threading.c */; };
+		1A2B3C4D000000000000006A /* xxhash.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000027 /* xxhash.c */; };
+		1A2B3C4D000000000000006B /* zstd_common.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000028 /* zstd_common.c */; };
+		1A2B3C4D000000000000006C /* huf_decompress.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000003A /* huf_decompress.c */; };
+		1A2B3C4D000000000000006D /* zstd_ddict.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000003B /* zstd_ddict.c */; };
+		1A2B3C4D000000000000006E /* zstd_decompress.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000003C /* zstd_decompress.c */; };
+		1A2B3C4D000000000000006F /* zstd_decompress_block.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000003D /* zstd_decompress_block.c */; };
+		1A2B3C4D0000000000000070 /* huf_decompress_amd64.S in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000041 /* huf_decompress_amd64.S */; };
+		1A2B3C4D0000000000000071 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000045 /* CoreFoundation.framework */; };
+		1A2B3C4D0000000000000072 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000045 /* CoreFoundation.framework */; };
+		1A2B3C4D0000000000000073 /* libzstd.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000044 /* libzstd.a */; };
+		1A2B3C4D0000000000000074 /* libzstd.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000044 /* libzstd.a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1A2B3C4D0000000000000018 /* xcresult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xcresult.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000019 /* bkeyed.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bkeyed.c; sourceTree = "<group>"; };
+		1A2B3C4D000000000000001A /* xccov.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xccov.c; sourceTree = "<group>"; };
+		1A2B3C4D000000000000001B /* xcresulttool.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xcresulttool.c; sourceTree = "<group>"; };
+		1A2B3C4D000000000000001C /* xcresult.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = xcresult.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000001D /* bkeyed.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bkeyed.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000001E /* zstd.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000001F /* zstd_errors.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd_errors.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000020 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000021 /* debug.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = debug.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000022 /* entropy_common.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = entropy_common.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000023 /* error_private.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = error_private.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000024 /* fse_decompress.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fse_decompress.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000025 /* pool.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pool.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000026 /* threading.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = threading.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000027 /* xxhash.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xxhash.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000028 /* zstd_common.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = zstd_common.c; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000029 /* allocations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = allocations.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000002A /* bits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bits.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000002B /* bitstream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bitstream.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000002C /* compiler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compiler.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000002D /* cpu.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cpu.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000002E /* debug.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = debug.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000002F /* error_private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = error_private.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000030 /* fse.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fse.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000031 /* huf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = huf.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000032 /* mem.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mem.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000033 /* pool.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = pool.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000034 /* portability_macros.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = portability_macros.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000035 /* threading.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = threading.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000036 /* xxhash.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = xxhash.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000037 /* zstd_deps.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd_deps.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000038 /* zstd_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd_internal.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000039 /* zstd_trace.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd_trace.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000003A /* huf_decompress.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = huf_decompress.c; sourceTree = "<group>"; };
+		1A2B3C4D000000000000003B /* zstd_ddict.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = zstd_ddict.c; sourceTree = "<group>"; };
+		1A2B3C4D000000000000003C /* zstd_decompress.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = zstd_decompress.c; sourceTree = "<group>"; };
+		1A2B3C4D000000000000003D /* zstd_decompress_block.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = zstd_decompress_block.c; sourceTree = "<group>"; };
+		1A2B3C4D000000000000003E /* zstd_ddict.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd_ddict.h; sourceTree = "<group>"; };
+		1A2B3C4D000000000000003F /* zstd_decompress_block.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd_decompress_block.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000040 /* zstd_decompress_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd_decompress_internal.h; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000041 /* huf_decompress_amd64.S */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.asm; path = huf_decompress_amd64.S; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000042 /* xccov */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = xccov; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A2B3C4D0000000000000043 /* xcresulttool */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = xcresulttool; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A2B3C4D0000000000000044 /* libzstd.a */ = {isa = PBXFileReference; explicitFileType = "archive.ar"; includeInIndex = 0; path = libzstd.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A2B3C4D0000000000000045 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1A2B3C4D000000000000004A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4D0000000000000071 /* CoreFoundation.framework in Frameworks */,
+				1A2B3C4D0000000000000073 /* libzstd.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A2B3C4D000000000000004B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4D0000000000000072 /* CoreFoundation.framework in Frameworks */,
+				1A2B3C4D0000000000000074 /* libzstd.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1A2B3C4D0000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D0000000000000017 /* src */,
+				1A2B3C4D0000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D0000000000000042 /* xccov */,
+				1A2B3C4D0000000000000043 /* xcresulttool */,
+				1A2B3C4D0000000000000044 /* libzstd.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000017 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D0000000000000011 /* common */,
+				1A2B3C4D0000000000000012 /* xccov */,
+				1A2B3C4D0000000000000013 /* xcresulttool */,
+				1A2B3C4D0000000000000016 /* zstd */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000011 /* common */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D0000000000000018 /* xcresult.c */,
+				1A2B3C4D000000000000001C /* xcresult.h */,
+			);
+			path = common;
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000012 /* xccov */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D0000000000000019 /* bkeyed.c */,
+				1A2B3C4D000000000000001A /* xccov.c */,
+				1A2B3C4D000000000000001D /* bkeyed.h */,
+			);
+			path = xccov;
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000013 /* xcresulttool */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D000000000000001B /* xcresulttool.c */,
+			);
+			path = xcresulttool;
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000016 /* zstd */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D000000000000001E /* zstd.h */,
+				1A2B3C4D000000000000001F /* zstd_errors.h */,
+				1A2B3C4D0000000000000020 /* LICENSE */,
+				1A2B3C4D0000000000000014 /* common */,
+				1A2B3C4D0000000000000015 /* decompress */,
+			);
+			path = zstd;
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000014 /* common */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D0000000000000021 /* debug.c */,
+				1A2B3C4D0000000000000022 /* entropy_common.c */,
+				1A2B3C4D0000000000000023 /* error_private.c */,
+				1A2B3C4D0000000000000024 /* fse_decompress.c */,
+				1A2B3C4D0000000000000025 /* pool.c */,
+				1A2B3C4D0000000000000026 /* threading.c */,
+				1A2B3C4D0000000000000027 /* xxhash.c */,
+				1A2B3C4D0000000000000028 /* zstd_common.c */,
+				1A2B3C4D0000000000000029 /* allocations.h */,
+				1A2B3C4D000000000000002A /* bits.h */,
+				1A2B3C4D000000000000002B /* bitstream.h */,
+				1A2B3C4D000000000000002C /* compiler.h */,
+				1A2B3C4D000000000000002D /* cpu.h */,
+				1A2B3C4D000000000000002E /* debug.h */,
+				1A2B3C4D000000000000002F /* error_private.h */,
+				1A2B3C4D0000000000000030 /* fse.h */,
+				1A2B3C4D0000000000000031 /* huf.h */,
+				1A2B3C4D0000000000000032 /* mem.h */,
+				1A2B3C4D0000000000000033 /* pool.h */,
+				1A2B3C4D0000000000000034 /* portability_macros.h */,
+				1A2B3C4D0000000000000035 /* threading.h */,
+				1A2B3C4D0000000000000036 /* xxhash.h */,
+				1A2B3C4D0000000000000037 /* zstd_deps.h */,
+				1A2B3C4D0000000000000038 /* zstd_internal.h */,
+				1A2B3C4D0000000000000039 /* zstd_trace.h */,
+			);
+			path = common;
+			sourceTree = "<group>";
+		};
+		1A2B3C4D0000000000000015 /* decompress */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4D000000000000003A /* huf_decompress.c */,
+				1A2B3C4D000000000000003B /* zstd_ddict.c */,
+				1A2B3C4D000000000000003C /* zstd_decompress.c */,
+				1A2B3C4D000000000000003D /* zstd_decompress_block.c */,
+				1A2B3C4D000000000000003E /* zstd_ddict.h */,
+				1A2B3C4D000000000000003F /* zstd_decompress_block.h */,
+				1A2B3C4D0000000000000040 /* zstd_decompress_internal.h */,
+				1A2B3C4D0000000000000041 /* huf_decompress_amd64.S */,
+			);
+			path = decompress;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1A2B3C4D000000000000004C /* xccov */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A2B3C4D000000000000004D /* Build configuration list for PBXNativeTarget "xccov" */;
+			buildPhases = (
+				1A2B3C4D0000000000000047 /* Sources */,
+				1A2B3C4D000000000000004A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1A2B3C4D000000000000005A /* PBXTargetDependency */,
+			);
+			name = xccov;
+			productName = xccov;
+			productReference = 1A2B3C4D0000000000000042 /* xccov */;
+			productType = "com.apple.product-type.tool";
+		};
+		1A2B3C4D0000000000000050 /* xcresulttool */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A2B3C4D0000000000000051 /* Build configuration list for PBXNativeTarget "xcresulttool" */;
+			buildPhases = (
+				1A2B3C4D0000000000000048 /* Sources */,
+				1A2B3C4D000000000000004B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1A2B3C4D000000000000005B /* PBXTargetDependency */,
+			);
+			name = xcresulttool;
+			productName = xcresulttool;
+			productReference = 1A2B3C4D0000000000000043 /* xcresulttool */;
+			productType = "com.apple.product-type.tool";
+		};
+		1A2B3C4D0000000000000054 /* libzstd */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A2B3C4D0000000000000055 /* Build configuration list for PBXNativeTarget "libzstd" */;
+			buildPhases = (
+				1A2B3C4D0000000000000049 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = libzstd;
+			productName = libzstd;
+			productReference = 1A2B3C4D0000000000000044 /* libzstd.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		1A2B3C4D0000000000000058 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A2B3C4D0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A2B3C4D0000000000000054;
+			remoteInfo = libzstd;
+		};
+		1A2B3C4D0000000000000059 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A2B3C4D0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A2B3C4D0000000000000054;
+			remoteInfo = libzstd;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		1A2B3C4D000000000000005A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A2B3C4D0000000000000054 /* libzstd */;
+			targetProxy = 1A2B3C4D0000000000000058 /* PBXContainerItemProxy */;
+		};
+		1A2B3C4D000000000000005B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A2B3C4D0000000000000054 /* libzstd */;
+			targetProxy = 1A2B3C4D0000000000000059 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXProject section */
+		1A2B3C4D0000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 1A2B3C4D000000000000005C /* Build configuration list for PBXProject "XCTest" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				base,
+			);
+			mainGroup = 1A2B3C4D0000000000000002;
+			productRefGroup = 1A2B3C4D0000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1A2B3C4D000000000000004C /* xccov */,
+				1A2B3C4D0000000000000050 /* xcresulttool */,
+				1A2B3C4D0000000000000054 /* libzstd */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1A2B3C4D0000000000000047 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4D000000000000005F /* xcresult.c in Sources */,
+				1A2B3C4D0000000000000060 /* bkeyed.c in Sources */,
+				1A2B3C4D0000000000000061 /* xccov.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A2B3C4D0000000000000048 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4D0000000000000062 /* xcresult.c in Sources */,
+				1A2B3C4D0000000000000063 /* xcresulttool.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A2B3C4D0000000000000049 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4D0000000000000064 /* debug.c in Sources */,
+				1A2B3C4D0000000000000065 /* entropy_common.c in Sources */,
+				1A2B3C4D0000000000000066 /* error_private.c in Sources */,
+				1A2B3C4D0000000000000067 /* fse_decompress.c in Sources */,
+				1A2B3C4D0000000000000068 /* pool.c in Sources */,
+				1A2B3C4D0000000000000069 /* threading.c in Sources */,
+				1A2B3C4D000000000000006A /* xxhash.c in Sources */,
+				1A2B3C4D000000000000006B /* zstd_common.c in Sources */,
+				1A2B3C4D000000000000006C /* huf_decompress.c in Sources */,
+				1A2B3C4D000000000000006D /* zstd_ddict.c in Sources */,
+				1A2B3C4D000000000000006E /* zstd_decompress.c in Sources */,
+				1A2B3C4D000000000000006F /* zstd_decompress_block.c in Sources */,
+				1A2B3C4D0000000000000070 /* huf_decompress_amd64.S in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1A2B3C4D000000000000005D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/debug";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OBJROOT = "$(SRCROOT)/build/obj/debug";
+				SDKROOT = macosx;
+				SYMROOT = "$(SRCROOT)/build";
+			};
+			name = Debug;
+		};
+		1A2B3C4D000000000000005E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/release";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OBJROOT = "$(SRCROOT)/build/obj/release";
+				SDKROOT = macosx;
+				SYMROOT = "$(SRCROOT)/build";
+			};
+			name = Release;
+		};
+		1A2B3C4D000000000000004E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				EXECUTABLE_PREFIX = "";
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src",
+					"$(SRCROOT)/src/common",
+					"$(SRCROOT)/src/xccov",
+					"$(SRCROOT)/src/zstd",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CFLAGS = (
+					-D_DARWIN_C_SOURCE,
+					-Wall,
+					-Wextra,
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		1A2B3C4D000000000000004F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = "";
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src",
+					"$(SRCROOT)/src/common",
+					"$(SRCROOT)/src/xccov",
+					"$(SRCROOT)/src/zstd",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CFLAGS = (
+					-D_DARWIN_C_SOURCE,
+					-Wall,
+					-Wextra,
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		1A2B3C4D0000000000000052 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				EXECUTABLE_PREFIX = "";
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src",
+					"$(SRCROOT)/src/common",
+					"$(SRCROOT)/src/xccov",
+					"$(SRCROOT)/src/zstd",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CFLAGS = (
+					-D_DARWIN_C_SOURCE,
+					-Wall,
+					-Wextra,
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		1A2B3C4D0000000000000053 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = "";
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src",
+					"$(SRCROOT)/src/common",
+					"$(SRCROOT)/src/xccov",
+					"$(SRCROOT)/src/zstd",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CFLAGS = (
+					-D_DARWIN_C_SOURCE,
+					-Wall,
+					-Wextra,
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		1A2B3C4D0000000000000056 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src/zstd",
+					"$(SRCROOT)/src/zstd/common",
+					"$(SRCROOT)/src/zstd/decompress",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CFLAGS = (
+					-D_DARWIN_C_SOURCE,
+					-Wall,
+					-Wextra,
+					-Wno-unused-parameter,
+					"-DZSTD_LEGACY_SUPPORT=0",
+				);
+				PRODUCT_NAME = zstd;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		1A2B3C4D0000000000000057 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src/zstd",
+					"$(SRCROOT)/src/zstd/common",
+					"$(SRCROOT)/src/zstd/decompress",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CFLAGS = (
+					-D_DARWIN_C_SOURCE,
+					-Wall,
+					-Wextra,
+					-Wno-unused-parameter,
+					"-DZSTD_LEGACY_SUPPORT=0",
+				);
+				PRODUCT_NAME = zstd;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A2B3C4D000000000000004D /* Build configuration list for PBXNativeTarget "xccov" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4D000000000000004E /* Debug */,
+				1A2B3C4D000000000000004F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A2B3C4D0000000000000051 /* Build configuration list for PBXNativeTarget "xcresulttool" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4D0000000000000052 /* Debug */,
+				1A2B3C4D0000000000000053 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A2B3C4D0000000000000055 /* Build configuration list for PBXNativeTarget "libzstd" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4D0000000000000056 /* Debug */,
+				1A2B3C4D0000000000000057 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A2B3C4D000000000000005C /* Build configuration list for PBXProject "XCTest" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4D000000000000005D /* Debug */,
+				1A2B3C4D000000000000005E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1A2B3C4D0000000000000001 /* Project object */;
+}
