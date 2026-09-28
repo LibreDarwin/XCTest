@@ -19,9 +19,25 @@
 /// indistinguishable from a wedged test runner.
 #define _XCTWaiterDefaultTimeout 300.0
 
+/// The waits that are currently blocked, outermost first. When one of them
+/// times out, every wait nested inside it is abandoned rather than left to run
+/// until its own deadline, which would keep the outer wait from ever returning.
+static NSLock *_XCTActiveWaitersLock = nil;
+static NSMutableArray<XCTWaiter *> *_XCTActiveWaiters = nil;
+
 @implementation XCTWaiter {
     __weak id<XCTWaiterDelegate> _delegate;
     NSArray<XCTestExpectation *> *_fulfilledExpectations;
+    BOOL _interrupted;
+}
+
++ (void)initialize
+{
+    if (self != [XCTWaiter class]) {
+        return;
+    }
+    _XCTActiveWaitersLock = [[NSLock alloc] init];
+    _XCTActiveWaiters = [NSMutableArray array];
 }
 
 - (instancetype)initWithDelegate:(id<XCTWaiterDelegate>)delegate
@@ -84,18 +100,41 @@
                           enforceOrder:(BOOL)enforceOrderOfFulfillment
 {
     _fulfilledExpectations = @[];
+    _interrupted = NO;
     if (expectations.count == 0) {
         return XCTWaiterResultCompleted;
     }
 
+    [self _pushActiveWaiter];
+    @try {
+        return [self _waitForExpectations:expectations
+                                  timeout:seconds
+                             enforceOrder:enforceOrderOfFulfillment];
+    } @finally {
+        [self _popActiveWaiter];
+    }
+}
+
+- (XCTWaiterResult)_waitForExpectations:(NSArray<XCTestExpectation *> *)expectations
+                                timeout:(NSTimeInterval)seconds
+                           enforceOrder:(BOOL)enforceOrderOfFulfillment
+{
     NSTimeInterval effectiveTimeout = (seconds > 0.0) ? seconds : _XCTWaiterDefaultTimeout;
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:effectiveTimeout];
 
     while (YES) {
+        // An enclosing wait that already timed out no longer cares about this
+        // one, so stop instead of blocking until this wait's own deadline.
+        if ([self _isInterrupted]) {
+            [self _recordFulfilledExpectationsIn:expectations];
+            return XCTWaiterResultInterrupted;
+        }
+
         // Inverted expectations are settled by staying untouched, so a single
         // violation is reported as soon as it is observed.
         for (XCTestExpectation *expectation in expectations) {
             if (expectation.isInverted && expectation.xct_fulfillmentCount > 0) {
+                [self _recordFulfilledExpectationsIn:expectations];
                 [self _notifyFulfilledInvertedExpectation:expectation];
                 return XCTWaiterResultInvertedFulfillment;
             }
@@ -104,6 +143,7 @@
         if (enforceOrderOfFulfillment) {
             XCTestExpectation *outOfOrder = [self _firstOrderingViolationIn:expectations];
             if (outOfOrder != nil) {
+                [self _recordFulfilledExpectationsIn:expectations];
                 [self _notifyOrderingViolationFor:outOfOrder in:expectations];
                 return XCTWaiterResultIncorrectOrder;
             }
@@ -122,13 +162,7 @@
         }
 
         if (pending.count == 0) {
-            NSMutableArray<XCTestExpectation *> *fulfilled = [NSMutableArray array];
-            for (XCTestExpectation *expectation in expectations) {
-                if (!expectation.isInverted) {
-                    [fulfilled addObject:expectation];
-                }
-            }
-            _fulfilledExpectations = fulfilled;
+            [self _recordFulfilledExpectationsIn:expectations];
             return XCTWaiterResultCompleted;
         }
 
@@ -144,12 +178,14 @@
                 }
             }
             if (genuinelyPending.count == 0) {
-                _fulfilledExpectations = @[];
+                [self _recordFulfilledExpectationsIn:expectations];
                 return XCTWaiterResultCompleted;
             }
             for (XCTestExpectation *expectation in genuinelyPending) {
                 [expectation xct_noteUnderFulfillment];
             }
+            [self _recordFulfilledExpectationsIn:expectations];
+            [self _interruptNestedWaiters];
             [self _notifyTimeoutWithUnfulfilled:genuinelyPending];
             return XCTWaiterResultTimedOut;
         }
@@ -182,7 +218,88 @@
     return nil;
 }
 
+#pragma mark - Nested waits
+
+- (void)_pushActiveWaiter
+{
+    [_XCTActiveWaitersLock lock];
+    [_XCTActiveWaiters addObject:self];
+    [_XCTActiveWaitersLock unlock];
+}
+
+- (void)_popActiveWaiter
+{
+    [_XCTActiveWaitersLock lock];
+    // Identity-based: the same waiter may legitimately be re-entered, and only
+    // its own frame should be removed.
+    NSUInteger index = [_XCTActiveWaiters indexOfObjectIdenticalTo:self];
+    if (index != NSNotFound) {
+        [_XCTActiveWaiters removeObjectAtIndex:index];
+    }
+    [_XCTActiveWaitersLock unlock];
+}
+
+// Marks every wait nested inside this one as interrupted and tells each one's
+// delegate. The snapshot is taken under the lock but notified outside it, so a
+// delegate that starts or ends a wait cannot deadlock against the registry.
+- (void)_interruptNestedWaiters
+{
+    [_XCTActiveWaitersLock lock];
+    NSUInteger outer = [_XCTActiveWaiters indexOfObjectIdenticalTo:self];
+    NSMutableArray<XCTWaiter *> *nested = [NSMutableArray array];
+    // Not finding self means this wait is not on the stack, and NSNotFound + 1
+    // would wrap to 0 and make it look like the outermost of every wait.
+    if (outer != NSNotFound) {
+        for (NSUInteger i = outer + 1; i < _XCTActiveWaiters.count; i++) {
+            [nested addObject:[_XCTActiveWaiters objectAtIndex:i]];
+        }
+    }
+    [_XCTActiveWaitersLock unlock];
+
+    for (XCTWaiter *waiter in nested) {
+        [waiter _markInterruptedByWaiter:self];
+    }
+}
+
+- (BOOL)_isInterrupted
+{
+    // Read under the same lock the flag is written under: the interrupting wait
+    // runs on another thread, and the poll loop reads it every 2ms.
+    @synchronized(self) {
+        return _interrupted;
+    }
+}
+
+- (void)_markInterruptedByWaiter:(XCTWaiter *)outerWaiter
+{
+    @synchronized(self) {
+        if (_interrupted) {
+            return;
+        }
+        _interrupted = YES;
+    }
+    id<XCTWaiterDelegate> delegate = _delegate;
+    if ([delegate respondsToSelector:@selector(nestedWaiter:wasInterruptedByTimedOutWaiter:)]) {
+        [delegate nestedWaiter:self wasInterruptedByTimedOutWaiter:outerWaiter];
+    }
+}
+
 #pragma mark - Delegate
+
+// Records which expectations reached their fulfillment count, so a wait that
+// ends in a timeout, an ordering violation, or an inverted fulfillment still
+// reports the subset that did succeed. Inverted expectations are excluded:
+// fulfilling one is a failure, and reporting it as fulfilled would hide that.
+- (void)_recordFulfilledExpectationsIn:(NSArray<XCTestExpectation *> *)expectations
+{
+    NSMutableArray<XCTestExpectation *> *fulfilled = [NSMutableArray array];
+    for (XCTestExpectation *expectation in expectations) {
+        if (!expectation.isInverted && expectation.xct_isSettled) {
+            [fulfilled addObject:expectation];
+        }
+    }
+    _fulfilledExpectations = fulfilled;
+}
 
 - (void)_notifyTimeoutWithUnfulfilled:(NSArray<XCTestExpectation *> *)unfulfilled
 {

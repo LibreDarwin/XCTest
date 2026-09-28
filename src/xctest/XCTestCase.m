@@ -316,6 +316,19 @@
     NSLock *completionLock = [[NSLock alloc] init];
     __block BOOL completed = NO;
 
+    // Shared by both catch clauses: a block that threw will never call back, so
+    // the expectation is fulfilled here to keep the waiter balanced. The lock
+    // covers the case where the block threw after already calling completion.
+    void (^abandonCompletion)(void) = ^{
+        [completionLock lock];
+        BOOL alreadyCompleted = completed;
+        completed = YES;
+        [completionLock unlock];
+        if (!alreadyCompleted) {
+            [finished fulfill];
+        }
+    };
+
     @try {
         block(^(NSError *_Nullable error) {
             [completionLock lock];
@@ -349,13 +362,13 @@
         });
     } @catch (NSException *exception) {
         [self _recordUnexpectedException:exception];
-        [completionLock lock];
-        BOOL alreadyCompleted = completed;
-        completed = YES;
-        [completionLock unlock];
-        if (!alreadyCompleted) {
-            [finished fulfill];
-        }
+        abandonCompletion();
+        return;
+    } @catch (...) {
+        // Matches _runTeardown: a throw of something that is not an NSException
+        // is still the test's failure, not a reason to take down the process.
+        [self _recordUnexpectedException:nil];
+        abandonCompletion();
         return;
     }
 
