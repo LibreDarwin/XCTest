@@ -43,6 +43,13 @@ NS_ASSUME_NONNULL_BEGIN
 // Only the members the test runner needs are declared. NSInvocation is how a
 // test method is invoked: an invocation carries a selector, its target and its
 // arguments, which is precisely "run this method on this object".
+//
+// The full public SDK ships these classes, and re-declaring them there is a
+// hard error ("duplicate interface definition"), not a harmless redeclaration.
+// The categories further down are safe either way -- declaring a method a
+// category already has is legal -- so only the two class redeclarations need
+// the guard.
+#if !__has_include(<Foundation/NSMethodSignature.h>)
 @interface NSMethodSignature : NSObject
 /// Number of bytes the return value occupies, so the caller can size the
 /// buffer it passes to -getReturnValue:.
@@ -74,6 +81,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// assign `selector` before either -invoke or -invokeWithTarget:.
 - (void)invokeWithTarget:(id)target;
 @end
+#endif /* !__has_include(<Foundation/NSMethodSignature.h>) */
 
 // Collection lookups the reduced NSArray.h omits. -firstObject is nil-safe and
 // -indexOfObject: returns NSNotFound when absent; both are ordinary upstream

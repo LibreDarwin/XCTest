@@ -356,6 +356,38 @@ test: check-link smoke check-framework
 clangd-config:
 	@SDK="$(SDK)" bash tools/gen-clangd-config.sh
 
+# Builds the XCTest framework through Xcode instead of the Makefile, then runs
+# the same framework smoke against that product, so the two build systems are
+# held to one standard. Not part of `test`: it needs an Xcode install and takes
+# far longer than the Makefile path, so it is opt-in and fails loudly when
+# xcodebuild is absent rather than silently skipping.
+#
+# The Makefile has three configurations (release/debug/asan) and the Xcode
+# project has two, named Release and Debug with capitals. CONFIG=debug does not
+# match "Debug", and asan has no Xcode counterpart at all -- adding one would
+# mean inventing flags with no make/asan.mk to agree with, which is a bigger
+# decision than this target should make on its own. So the mapping is a shell
+# case statement in the recipe: both make flavours pass it through unchanged,
+# which a make-level conditional assignment could not do here.
+#
+# CONFIGURATION_BUILD_DIR in the project points at build/<config>, so the Xcode
+# product lands where the Makefile's would; `make` rebuilds over it. They are
+# never both live at once, which is why the smoke test below is the only thing
+# that has to be told which product it is looking at.
+check-xcode:
+	@command -v xcodebuild >/dev/null 2>&1 || \
+		{ echo "check-xcode: xcodebuild not found; install Xcode or use 'make test'"; exit 1; }
+	@case "$(CONFIG)" in \
+		release) xc=Release; dir=release ;; \
+		debug)   xc=Debug;   dir=debug ;; \
+		*)       xc=Release; dir=release; \
+		         echo "check-xcode: CONFIG=$(CONFIG) has no Xcode configuration, using Release" ;; \
+	esac; \
+	echo "check-xcode: building XCTest.framework ($$xc) via xcodebuild"; \
+	xcodebuild -project XCTest.xcodeproj -target XCTest -configuration "$$xc" build \
+		| grep -E '^(error|warning):|^\*\* BUILD' || { echo "check-xcode: xcodebuild failed"; exit 1; }; \
+	bash tools/framework-smoke.sh "build/$$dir/XCTest.framework" "$(SDK)" "$(CC)"
+
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 0755 $(XCCOV) $(DESTDIR)$(PREFIX)/bin/xccov
@@ -369,4 +401,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework test clangd-config install clean
+.PHONY: all check-link smoke check-framework test clangd-config check-xcode install clean

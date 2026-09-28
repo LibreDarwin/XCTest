@@ -86,9 +86,17 @@ fi
 # Dependency lines start after the file path and the install name.  Any
 # dependency naming XCTest by absolute path would mean Apple's binary is being
 # pulled in instead of ours.
-if otool -L "$BIN" 2>/dev/null | tail -n +3 | grep 'XCTest'; then
-	note "dependencies" "dylib depends on an XCTest path; Apple's binary could be loaded instead of ours"
-fi
+#
+# otool -L prints one such header per architecture for a fat binary, so
+# "tail -n +3" only strips the first slice's file path and install name.  A
+# universal build would then have its *second* install name (@rpath/XCTest...)
+# read as a dependency and fail on itself.  Ask otool for one architecture at a
+# time, so the line arithmetic holds for both thin and fat products.
+for arch in $(lipo -archs "$BIN" 2>/dev/null); do
+	if otool -arch "$arch" -L "$BIN" 2>/dev/null | tail -n +3 | grep 'XCTest'; then
+		note "dependencies" "dylib ($arch) depends on an XCTest path; Apple's binary could be loaded instead of ours"
+	fi
+done
 
 # --- 3. a real client --------------------------------------------------------
 

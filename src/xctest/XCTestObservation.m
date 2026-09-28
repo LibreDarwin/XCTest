@@ -101,8 +101,30 @@ NS_ASSUME_NONNULL_BEGIN
         // turn it into a spurious failure of the test under it, or worse, abort
         // the run. The test's own assertions are what decide the outcome.
         @try {
+            // The cast below is the standard objc_msgSend idiom and is correct.
+            // The selector is a parameter here, so the callee's real signature
+            // is not known at compile time and msgSend has to be called through
+            // a pointer typed to the call. -Wcast-function-type-mismatch fires
+            // because that pointer's type is not formally identical to
+            // objc_msgSend's own variadic signature, once per architecture.
+            //
+            // It is suppressed rather than worked around. Retyping the pointer
+            // as id (*)(id, SEL, ...) to match objc_msgSend and silence the
+            // warning was tried and regressed at runtime: observers were handed
+            // a garbage subject pointer and the first test to start segfaulted
+            // in objc_retain. The exact mechanism was not pinned down, but the
+            // result was reproduced against both a static and a dynamic link,
+            // so the cast below stands and the warning is suppressed narrowly
+            // rather than papered over file-wide.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-function-type-mismatch"
+#endif
             void (*send)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
             send(observer, selector, subject);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
         } @catch (NSException *exception) {
             (void)exception;
         }
