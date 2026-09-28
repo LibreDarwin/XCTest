@@ -1,0 +1,24 @@
+// Copyright (C) 2026, LibreDarwin
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Module map for XCTest.framework.
+//
+// This file is installed as XCTest.framework/Modules/module.modulemap, so the
+// umbrella header below is resolved relative to the framework's Headers
+// directory.  It is what makes "@import XCTest;" work for clients in addition
+// to the traditional "#import <XCTest/XCTest.h>".
+//
+//   framework module XCTest {
+//     umbrella header "XCTest.h"
+//     export *
+//   }
+//
+// The nested "module *" re-export keeps submodules importable for clients that
+// reach for a narrower name, matching what an umbrella-only module would give
+// them after a single import.
+
+framework module XCTest {
+  umbrella header "XCTest.h"
+  export *
+  module * { export * }
+}

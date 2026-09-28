@@ -1,7 +1,8 @@
 # Copyright (C) 2026, LibreDarwin
 # SPDX-License-Identifier: BSD-3-Clause
 # Open-source reimplementation of the developer tools in Apple's XCTest repo:
-# xccov and xcresulttool, plus the vendored zstd decompressor they share.
+# xccov and xcresulttool, plus the vendored zstd decompressor they share, and
+# the XCTest.framework the test code itself is compiled and linked against.
 #
 # Build layout: every artifact lives under build/; final tools go to
 # build/release/ or build/debug/ per CONFIG.
@@ -20,6 +21,9 @@ AR     := /Users/sunneva/xnuports-root/devel/xcode-tools/build/release/Developer
 BUILD_DIR := build/$(CONFIG)
 OBJDIR    := $(BUILD_DIR)/obj
 LIBDIR    := $(BUILD_DIR)/lib
+# XCTest.framework's objects are kept apart from the C tools' so that no .o is
+# ever shared between a -std=c11 translation unit and an ObjC one.
+XCTEST_OBJDIR := $(BUILD_DIR)/obj-xctest
 
 # -Isrc/zstd is in the tool flags as well as the library's: xcresult.c reaches
 # zstd.h with angle brackets, so the header directory has to be on the search
@@ -42,12 +46,87 @@ ZSTD_CFLAGS := $(OPT) -std=c11 -D_DARWIN_C_SOURCE -isysroot "$(SDK)" \
 	  -Isrc/zstd -Isrc/zstd/common -Isrc/zstd/decompress \
 	  -DZSTD_LEGACY_SUPPORT=0 -Wall -Wextra -Wno-unused-parameter
 
+# XCTest.framework's sources are Objective-C, so they cannot share CFLAGS: the
+# -std=c11 above is a hard error for an ObjC translation unit.  -fobjc-arc is
+# what the whole framework is written under.  The public headers are found
+# through <XCTest/...>, so src/xctest/include is the include root, and
+# src/xctest is on the path for the private headers that sit next to the .m
+# files.  No -Werror here, matching CFLAGS: the C tools do not use it either,
+# and a warning in a vendored tree should not stop the build.
+OBJCFLAGS := $(OPT) -fobjc-arc -fobjc-exceptions -fblocks -isysroot "$(SDK)" \
+	  -Isrc/xctest/include -Isrc/xctest -Wall -Wextra
+
 # Apple's xccov links XCTHarness, DVTFoundation and IDEFoundation; its
 # xcresulttool links CoreServices, UniformTypeIdentifiers and OSAnalytics.
 # Ours read the bundle format directly -- an NSKeyedArchiver plist plus a
 # content-addressed object store -- so CoreFoundation is the only framework
 # either tool needs, and neither links XCTest.framework.
 FW := -framework CoreFoundation
+
+# XCTest.framework is a versioned bundle: the binary, the public headers, the
+# module map and the Info.plist all live under Versions/A, and the top level
+# names are symlinks through Versions/Current.  That is the shape clients
+# expect from a framework, and the shape the -install_name below advertises.
+#
+# The binary is linked as a dylib with an @rpath install name rather than an
+# absolute one, so the same build works from build/ or from $(PREFIX)/lib.  It
+# links Foundation and nothing else: no dylib dependency on Apple's own
+# XCTest.framework, which is the whole point of building this.
+XCTEST_FW_DIR  := $(BUILD_DIR)/XCTest.framework
+XCTEST_FW_VER  := $(XCTEST_FW_DIR)/Versions/A
+XCTEST_FW      := $(XCTEST_FW_VER)/XCTest
+XCTEST_FW_STAMP := $(XCTEST_FW_DIR)/.stamp
+XCTEST_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTest.framework/Versions/A/XCTest" -framework Foundation
+
+# Every public header is installed, not just the ones a given object happens to
+# include: a framework that ships a binary but not its full header set is
+# broken for any client that imports the umbrella.  The same list doubles as the
+# bundle's rebuild dependency, so editing any public header restages it.
+#
+# The five private headers (XCTestInternal.h, XCTestFoundationCompat.h,
+# XCTestObservationInternal.h, XCTestExpectationInternal.h and
+# XCTestAssertionFormats.h) are deliberately not installed: they sit in
+# src/xctest rather than include/XCTest because they are not part of the
+# public API, and a client that needs one of them is a client we cannot
+# support the same way twice.
+XCTEST_FW_HEADERS := src/xctest/include/XCTest/XCAbstractTest.h \
+	src/xctest/include/XCTest/XCTActivity.h \
+	src/xctest/include/XCTest/XCTAttachment.h \
+	src/xctest/include/XCTest/XCTAttachmentLifetime.h \
+	src/xctest/include/XCTest/XCTContext.h \
+	src/xctest/include/XCTest/XCTExpectedFailure.h \
+	src/xctest/include/XCTest/XCTIssue.h \
+	src/xctest/include/XCTest/XCTSourceCodeContext.h \
+	src/xctest/include/XCTest/XCTWaiter.h \
+	src/xctest/include/XCTest/XCTest.h \
+	src/xctest/include/XCTest/XCTestAssertions.h \
+	src/xctest/include/XCTest/XCTestAssertionsImpl.h \
+	src/xctest/include/XCTest/XCTestCase.h \
+	src/xctest/include/XCTest/XCTestCaseRun.h \
+	src/xctest/include/XCTest/XCTestDefines.h \
+	src/xctest/include/XCTest/XCTestErrors.h \
+	src/xctest/include/XCTest/XCTestExpectation.h \
+	src/xctest/include/XCTest/XCTestObservation.h \
+	src/xctest/include/XCTest/XCTestObservationCenter.h \
+	src/xctest/include/XCTest/XCTestObserver.h \
+	src/xctest/include/XCTest/XCTestRun.h \
+	src/xctest/include/XCTest/XCTestSkipping.h \
+	src/xctest/include/XCTest/XCTestSkippingImpl.h \
+	src/xctest/include/XCTest/XCTestSuite.h \
+	src/xctest/include/XCTest/XCTestSuiteRun.h
+
+XCTEST_PRIV_HDRS := src/xctest/XCTestAssertionFormats.h \
+	src/xctest/XCTestExpectationInternal.h \
+	src/xctest/XCTestFoundationCompat.h \
+	src/xctest/XCTestInternal.h \
+	src/xctest/XCTestObservationInternal.h
+
+XCTEST_FW_OBJS := $(XCTEST_OBJDIR)/XCTest.o $(XCTEST_OBJDIR)/XCTestSuite.o \
+	$(XCTEST_OBJDIR)/XCTestCase.o $(XCTEST_OBJDIR)/XCTestRun.o \
+	$(XCTEST_OBJDIR)/XCTestObservation.o $(XCTEST_OBJDIR)/XCTestAssertions.o \
+	$(XCTEST_OBJDIR)/XCTestInternal.o $(XCTEST_OBJDIR)/XCTestSupportTypes.o \
+	$(XCTEST_OBJDIR)/XCTestExpectation.o $(XCTEST_OBJDIR)/XCTWaiter.o \
+	$(XCTEST_OBJDIR)/XCTExpectedFailure.o
 
 XCCOV        := $(BUILD_DIR)/xccov
 XCCOV_OBJS   := $(OBJDIR)/xcresult.o $(OBJDIR)/bkeyed.o $(OBJDIR)/xccov.o
@@ -72,7 +151,85 @@ LIBZSTD_OBJS := $(OBJDIR)/zstd_debug.o $(OBJDIR)/zstd_entropy_common.o \
 PREFIX  ?= /usr/local
 DESTDIR ?=
 
-all: $(XCCOV) $(XCRESULTTOOL)
+all: $(XCCOV) $(XCRESULTTOOL) $(XCTEST_FW_STAMP)
+
+# The bundle is assembled into a stamp file rather than being a make target in
+# its own right: a framework is a directory, and every make variant treats a
+# directory's timestamp as meaningless, so depending on one directly would
+# either rebuild forever or never rebuild.  The stamp depends on the binary and
+# on every installed file, so it goes stale exactly when the bundle does.
+$(XCTEST_FW_STAMP): $(XCTEST_FW) src/xctest/module.modulemap src/xctest/Info.plist $(XCTEST_FW_HEADERS)
+	@mkdir -p $(XCTEST_FW_VER)/Headers $(XCTEST_FW_VER)/Modules $(XCTEST_FW_VER)/Resources
+	cp $(XCTEST_FW_HEADERS) $(XCTEST_FW_VER)/Headers
+	cp src/xctest/module.modulemap $(XCTEST_FW_VER)/Modules/module.modulemap
+	cp src/xctest/Info.plist $(XCTEST_FW_VER)/Resources/Info.plist
+	rm -f $(XCTEST_FW_DIR)/Versions/Current
+	ln -s A $(XCTEST_FW_DIR)/Versions/Current
+	rm -f $(XCTEST_FW_DIR)/Headers $(XCTEST_FW_DIR)/Modules \
+		$(XCTEST_FW_DIR)/Resources $(XCTEST_FW_DIR)/XCTest
+	ln -s Versions/Current/Headers $(XCTEST_FW_DIR)/Headers
+	ln -s Versions/Current/Modules $(XCTEST_FW_DIR)/Modules
+	ln -s Versions/Current/Resources $(XCTEST_FW_DIR)/Resources
+	ln -s Versions/Current/XCTest $(XCTEST_FW_DIR)/XCTest
+	@touch $@
+
+$(XCTEST_FW): $(XCTEST_FW_OBJS)
+	@mkdir -p $(XCTEST_FW_VER)
+	$(CC) $(OBJCFLAGS) $(XCTEST_FW_LDFLAGS) -o $@ $(XCTEST_FW_OBJS)
+
+# Every object depends on the whole public header set, because the umbrella
+# header XCTest.h includes all of it and most translation units import the
+# umbrella: a header reached through the umbrella is still a header the object
+# was compiled against, and listing only the directly-imported ones would let
+# make keep a stale .o after an edit to a header two levels down.  That
+# over-approximates for the two or three units that import a narrow subset
+# directly (XCTWaiter.m, XCTestObservation.m), which costs an occasional
+# redundant recompile and never a wrong one.  The private headers are listed
+# per unit because those genuinely differ, and that is where the discrimination
+# is worth having.
+$(XCTEST_OBJDIR)/XCTest.o: src/xctest/XCTest.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTest.m
+
+$(XCTEST_OBJDIR)/XCTestSuite.o: src/xctest/XCTestSuite.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestSuite.m
+
+$(XCTEST_OBJDIR)/XCTestCase.o: src/xctest/XCTestCase.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h src/xctest/XCTestExpectationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestCase.m
+
+$(XCTEST_OBJDIR)/XCTestRun.o: src/xctest/XCTestRun.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestRun.m
+
+$(XCTEST_OBJDIR)/XCTestObservation.o: src/xctest/XCTestObservation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestObservation.m
+
+$(XCTEST_OBJDIR)/XCTestAssertions.o: src/xctest/XCTestAssertions.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestAssertionFormats.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestAssertions.m
+
+$(XCTEST_OBJDIR)/XCTestInternal.o: src/xctest/XCTestInternal.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestInternal.m
+
+$(XCTEST_OBJDIR)/XCTestSupportTypes.o: src/xctest/XCTestSupportTypes.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestSupportTypes.m
+
+$(XCTEST_OBJDIR)/XCTestExpectation.o: src/xctest/XCTestExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestExpectation.m
+
+$(XCTEST_OBJDIR)/XCTWaiter.o: src/xctest/XCTWaiter.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTWaiter.m
+
+$(XCTEST_OBJDIR)/XCTExpectedFailure.o: src/xctest/XCTExpectedFailure.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTExpectedFailure.m
 
 $(XCCOV): $(XCCOV_OBJS) $(LIBZSTD)
 	@mkdir -p $(BUILD_DIR)
@@ -181,14 +338,28 @@ check-link: all
 smoke: all
 	@bash tools/smoke.sh "build/$(CONFIG)/xccov" "build/$(CONFIG)/xcresulttool"
 
-test: check-link smoke
+# XCTest.framework gets its own check, in a script for the same reason as above:
+# it is long, and it has to run identically under both make variants.  Three
+# layers -- the bundle layout, the dylib's link contract, and a client that
+# compiles, links and runs against the built framework with nothing but -rpath
+# to find it.  The last layer is what would catch a bundle that builds but
+# cannot be loaded.
+check-framework: $(XCTEST_FW_STAMP)
+	@bash tools/framework-smoke.sh "$(XCTEST_FW_DIR)" "$(SDK)" "$(CC)"
+
+test: check-link smoke check-framework
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 0755 $(XCCOV) $(DESTDIR)$(PREFIX)/bin/xccov
 	install -m 0755 $(XCRESULTTOOL) $(DESTDIR)$(PREFIX)/bin/xcresulttool
+	# cp -R, not install: the bundle is a directory tree full of relative
+	# symlinks, and install has no way to reproduce that layout.
+	rm -rf $(DESTDIR)$(PREFIX)/lib/XCTest.framework
+	install -d $(DESTDIR)$(PREFIX)/lib
+	cp -R $(XCTEST_FW_DIR) $(DESTDIR)$(PREFIX)/lib/XCTest.framework
 
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke test install clean
+.PHONY: all check-link smoke check-framework test install clean
