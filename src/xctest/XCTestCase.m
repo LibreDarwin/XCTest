@@ -21,6 +21,13 @@
 #import <pthread.h>
 #import <string.h>
 
+/// How long an async teardown block is given when the test sets no execution
+/// time allowance. An allowance of 0 means "no limit", which is right for the
+/// test body but not for teardown, where a block that never calls back would
+/// otherwise hold up the whole run. Deliberately not configurable through the
+/// environment: a wedged teardown must not be able to widen its own deadline.
+#define _XCTAsyncTeardownDefaultTimeout 30.0
+
 /// One outstanding XCTExpectFailure declaration, held until an issue matches it
 /// or the test ends.
 @interface _XCTExpectedFailureScope : NSObject
@@ -383,9 +390,12 @@
 
     // An execution time allowance of 0 disables the limit, which is the right
     // default for the test body but not for teardown: a block that never calls
-    // back would then hold up the whole run. Fall back to a short bound so a
-    // wedged teardown is reported instead of stalling indefinitely.
-    NSTimeInterval timeout = (self.executionTimeAllowance > 0.0) ? self.executionTimeAllowance : 30.0;
+    // back would then hold up the whole run. Fall back to a bound so a wedged
+    // teardown is reported instead of stalling indefinitely. A test that wants
+    // a different limit sets executionTimeAllowance; nothing else is consulted.
+    NSTimeInterval timeout = (self.executionTimeAllowance > 0.0)
+        ? self.executionTimeAllowance
+        : _XCTAsyncTeardownDefaultTimeout;
     XCTWaiterResult result = [XCTWaiter waitForExpectations:@[finished] timeout:timeout];
     if (result != XCTWaiterResultCompleted) {
         [self.testRun recordIssue:[[XCTIssue alloc]

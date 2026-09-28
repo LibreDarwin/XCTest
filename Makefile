@@ -349,6 +349,13 @@ check-framework: $(XCTEST_FW_STAMP)
 
 test: check-link smoke check-framework
 
+# Editor configuration, not build output. Not in `all` and not in `test`: the
+# committed src/xctest/.clangd is already usable, and regenerating it is only
+# needed when the SDK above changes. Kept out of `all` so a plain build never
+# rewrites a tracked file.
+clangd-config:
+	@SDK="$(SDK)" bash tools/gen-clangd-config.sh
+
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 0755 $(XCCOV) $(DESTDIR)$(PREFIX)/bin/xccov
@@ -362,4 +369,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework test install clean
+.PHONY: all check-link smoke check-framework test clangd-config install clean
