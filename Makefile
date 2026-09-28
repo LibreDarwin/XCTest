@@ -94,8 +94,12 @@ XCTEST_FW_HEADERS := src/xctest/include/XCTest/XCAbstractTest.h \
 	src/xctest/include/XCTest/XCTAttachment.h \
 	src/xctest/include/XCTest/XCTAttachmentLifetime.h \
 	src/xctest/include/XCTest/XCTContext.h \
+	src/xctest/include/XCTest/XCTDarwinNotificationExpectation.h \
 	src/xctest/include/XCTest/XCTExpectedFailure.h \
 	src/xctest/include/XCTest/XCTIssue.h \
+	src/xctest/include/XCTest/XCTKVOExpectation.h \
+	src/xctest/include/XCTest/XCTNSNotificationExpectation.h \
+	src/xctest/include/XCTest/XCTNSPredicateExpectation.h \
 	src/xctest/include/XCTest/XCTSourceCodeContext.h \
 	src/xctest/include/XCTest/XCTWaiter.h \
 	src/xctest/include/XCTest/XCTest.h \
@@ -126,6 +130,10 @@ XCTEST_FW_OBJS := $(XCTEST_OBJDIR)/XCTest.o $(XCTEST_OBJDIR)/XCTestSuite.o \
 	$(XCTEST_OBJDIR)/XCTestObservation.o $(XCTEST_OBJDIR)/XCTestAssertions.o \
 	$(XCTEST_OBJDIR)/XCTestInternal.o $(XCTEST_OBJDIR)/XCTestSupportTypes.o \
 	$(XCTEST_OBJDIR)/XCTestExpectation.o $(XCTEST_OBJDIR)/XCTWaiter.o \
+	$(XCTEST_OBJDIR)/XCTNSNotificationExpectation.o \
+	$(XCTEST_OBJDIR)/XCTNSPredicateExpectation.o \
+	$(XCTEST_OBJDIR)/XCTKVOExpectation.o \
+	$(XCTEST_OBJDIR)/XCTDarwinNotificationExpectation.o \
 	$(XCTEST_OBJDIR)/XCTExpectedFailure.o
 
 XCCOV        := $(BUILD_DIR)/xccov
@@ -226,6 +234,26 @@ $(XCTEST_OBJDIR)/XCTestExpectation.o: src/xctest/XCTestExpectation.m $(XCTEST_FW
 $(XCTEST_OBJDIR)/XCTWaiter.o: src/xctest/XCTWaiter.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
 	@mkdir -p $(XCTEST_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTWaiter.m
+
+# The four subclass units share a dependency set: each is a subclass of
+# XCTestExpectation, so each needs the base class's private header for the poll
+# hook and the issue-attribution helper, plus the compatibility header for the
+# Foundation or notify(3) API its own feature is missing from the reduced SDK.
+$(XCTEST_OBJDIR)/XCTNSNotificationExpectation.o: src/xctest/XCTNSNotificationExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTNSNotificationExpectation.m
+
+$(XCTEST_OBJDIR)/XCTNSPredicateExpectation.o: src/xctest/XCTNSPredicateExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h src/xctest/XCTestInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTNSPredicateExpectation.m
+
+$(XCTEST_OBJDIR)/XCTKVOExpectation.o: src/xctest/XCTKVOExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTKVOExpectation.m
+
+$(XCTEST_OBJDIR)/XCTDarwinNotificationExpectation.o: src/xctest/XCTDarwinNotificationExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h src/xctest/XCTestInternal.h
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTDarwinNotificationExpectation.m
 
 $(XCTEST_OBJDIR)/XCTExpectedFailure.o: src/xctest/XCTExpectedFailure.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
 	@mkdir -p $(XCTEST_OBJDIR)
@@ -339,15 +367,19 @@ smoke: all
 	@bash tools/smoke.sh "build/$(CONFIG)/xccov" "build/$(CONFIG)/xcresulttool"
 
 # XCTest.framework gets its own check, in a script for the same reason as above:
-# it is long, and it has to run identically under both make variants.  Three
-# layers -- the bundle layout, the dylib's link contract, and a client that
-# compiles, links and runs against the built framework with nothing but -rpath
-# to find it.  The last layer is what would catch a bundle that builds but
-# cannot be loaded.
+# it is long, and it has to run identically under both make variants.  Four
+# layers -- the bundle layout, the dylib's link contract, a client that compiles,
+# links and runs against the built framework with nothing but -rpath to find it,
+# and the expectation subclasses driven for real.  The last two are what would
+# catch a bundle that builds but cannot be loaded, and a subclass that links but
+# does not deliver.
 check-framework: $(XCTEST_FW_STAMP)
 	@bash tools/framework-smoke.sh "$(XCTEST_FW_DIR)" "$(SDK)" "$(CC)"
 
-test: check-link smoke check-framework
+check-expectations: $(XCTEST_FW_STAMP)
+	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh
+
+test: check-link smoke check-framework check-expectations
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd is already usable, and regenerating it is only
@@ -370,10 +402,12 @@ clangd-config:
 # case statement in the recipe: both make flavours pass it through unchanged,
 # which a make-level conditional assignment could not do here.
 #
-# CONFIGURATION_BUILD_DIR in the project points at build/<config>, so the Xcode
-# product lands where the Makefile's would; `make` rebuilds over it. They are
-# never both live at once, which is why the smoke test below is the only thing
-# that has to be told which product it is looking at.
+# CONFIGURATION_BUILD_DIR in the project points at build/xcode-<config>, not at
+# build/<config>. Sharing the directory with the Makefile is what made this check
+# untrustworthy: the Xcode product and the make product sat in the same tree, so
+# a stale framework from a previous make could satisfy the smoke test after a
+# failed or skipped xcodebuild. A separate directory plus a clean makes the
+# smoke test describe the binary xcodebuild just produced and nothing else.
 check-xcode:
 	@command -v xcodebuild >/dev/null 2>&1 || \
 		{ echo "check-xcode: xcodebuild not found; install Xcode or use 'make test'"; exit 1; }
@@ -384,9 +418,11 @@ check-xcode:
 		         echo "check-xcode: CONFIG=$(CONFIG) has no Xcode configuration, using Release" ;; \
 	esac; \
 	echo "check-xcode: building XCTest.framework ($$xc) via xcodebuild"; \
+	rm -rf build/xcode-$$dir; \
 	xcodebuild -project XCTest.xcodeproj -target XCTest -configuration "$$xc" build \
 		| grep -E '^(error|warning):|^\*\* BUILD' || { echo "check-xcode: xcodebuild failed"; exit 1; }; \
-	bash tools/framework-smoke.sh "build/$$dir/XCTest.framework" "$(SDK)" "$(CC)"
+	bash tools/framework-smoke.sh "build/xcode-$$dir/XCTest.framework" "$(SDK)" "$(CC)"; \
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -401,4 +437,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations test clangd-config check-xcode install clean

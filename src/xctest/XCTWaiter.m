@@ -151,6 +151,12 @@ static NSMutableArray<XCTWaiter *> *_XCTActiveWaiters = nil;
 
         NSMutableArray<XCTestExpectation *> *pending = [NSMutableArray array];
         for (XCTestExpectation *expectation in expectations) {
+            // A condition that is state rather than an event, such as a
+            // predicate, re-checks itself here and calls -fulfill when it holds.
+            // Done before the settled test below so a fulfillment raised by this
+            // iteration is seen in the same pass.
+            [expectation xct_poll];
+
             if (expectation.isInverted) {
                 // Settled as long as it has not been fulfilled; keep waiting.
                 if (expectation.xct_fulfillmentCount == 0) {

@@ -148,7 +148,7 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
 {
     // An over-fulfillment usually means a duplicate callback, so it is the kind
     // of bug worth reporting even though the wait itself will succeed.
-    XCTestCase *testCase = [self _issueReportingTestCase];
+    XCTestCase *testCase = [self _xct_issueReportingTestCase];
     if (testCase == nil) {
         return;
     }
@@ -165,7 +165,7 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
 // the thread's current test case, because -fulfill and the expiry of a wait are
 // both routinely called from background queues that have no current test case,
 // and a bug that vanishes when it happens off the test thread is not reported.
-- (XCTestCase *)_issueReportingTestCase
+- (XCTestCase *)_xct_issueReportingTestCase
 {
     XCTestCase *owning = _owningTestCase;
     if (owning != nil) {
@@ -218,6 +218,15 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
     [_lock unlock];
 }
 
+- (void)xct_poll
+{
+    // No-op: a plain expectation is satisfied by a callback that calls -fulfill,
+    // so there is nothing to re-check here. See -xct_poll in
+    // XCTestExpectationInternal.h.
+}
+
+#pragma mark - Under-fulfillment
+
 /// Recorded so an under-fulfillment is reported once even if the same
 /// expectation is reused across waits.
 - (void)xct_noteUnderFulfillment
@@ -229,7 +238,7 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void)
     if (!shouldReport) {
         return;
     }
-    XCTestCase *testCase = [self _issueReportingTestCase];
+    XCTestCase *testCase = [self _xct_issueReportingTestCase];
     if (testCase == nil) {
         return;
     }

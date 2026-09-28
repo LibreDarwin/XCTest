@@ -15,6 +15,10 @@
 #import <XCTest/XCTIssue.h>
 #import <XCTest/XCTExpectedFailure.h>
 #import <XCTest/XCTestExpectation.h>
+#import <XCTest/XCTNSNotificationExpectation.h>
+#import <XCTest/XCTNSPredicateExpectation.h>
+#import <XCTest/XCTKVOExpectation.h>
+#import <XCTest/XCTDarwinNotificationExpectation.h>
 #import <XCTest/XCTWaiter.h>
 #import <XCTest/XCTActivity.h>
 #import <XCTest/XCTContext.h>

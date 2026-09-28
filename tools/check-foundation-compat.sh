@@ -21,9 +21,15 @@ root=$(cd "$here/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# Both include roots, because the header under test imports <XCTest/XCTestDefines.h>
+# like every other public header does. Dropping the public root used to work
+# because nothing in this header needed it, and the check then failed on a
+# missing include rather than on a wrong declaration -- which is the one failure
+# mode this file exists to rule out.
 "$CC" -fobjc-arc -Wall -Wextra -Werror \
     -isysroot "$SDK" \
     -I"$root/src/xctest" \
+    -I"$root/src/xctest/include" \
     -framework Foundation \
     -o "$tmp/foundation-compat-test" \
     "$here/foundation-compat-test.m"

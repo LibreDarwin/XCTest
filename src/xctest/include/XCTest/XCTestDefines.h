@@ -59,6 +59,38 @@
 #define XCT_SWIFT_UNAVAILABLE_FROM_ASYNC(msg)
 #endif
 
+// Marks a block or parameter as safe to hand across a concurrency domain. Purely
+// a Swift-import hint with no effect on the Objective-C compiler, so it expands
+// to nothing when swift_attr is unavailable.
+#ifndef XCT_SWIFT_SENDABLE
+    #if defined(__has_attribute) && __has_attribute(swift_attr)
+        #define XCT_SWIFT_SENDABLE __attribute__((swift_attr("@Sendable")))
+    #else
+        #define XCT_SWIFT_SENDABLE
+    #endif
+#endif
+
+// A deprecation that also names a Swift replacement, so Swift clients get a
+// fix-it rather than only a warning. Swift-only like XCT_SWIFT_SENDABLE.
+#ifndef XCT_TO_BE_DEPRECATED_WITH_SWIFT_REPLACEMENT
+    #if defined(__has_attribute) && __has_attribute(swift_attr)
+        #define XCT_TO_BE_DEPRECATED_WITH_SWIFT_REPLACEMENT(REPLACEMENT) \
+            __attribute__((deprecated("Replaced by '" REPLACEMENT "'"))) \
+            __attribute__((swift_attr("@_deprecated(replacedBy: \"" REPLACEMENT "\")")))
+    #else
+        #define XCT_TO_BE_DEPRECATED_WITH_SWIFT_REPLACEMENT(REPLACEMENT) \
+            __attribute__((deprecated("Replaced by '" REPLACEMENT "'")))
+    #endif
+#endif
+
+// Performance measurement was introduced in Xcode 11, so Apple's metric API is
+// gated on iOS 13 / tvOS 13 / watchOS 7. This framework has no non-macOS
+// deployment targets, so the gate is vacuous here and expands to nothing; the
+// macro exists so client code that spells it out keeps compiling.
+#ifndef XCT_METRIC_API_AVAILABLE
+#define XCT_METRIC_API_AVAILABLE
+#endif
+
 #define XCT_UNAVAILABLE(msg) __attribute__((unavailable(msg)))
 #define XCT_DEPRECATED_WITH_REPLACEMENT(REPLACEMENT) \
     __attribute__((deprecated("Replaced by '" REPLACEMENT "'")))

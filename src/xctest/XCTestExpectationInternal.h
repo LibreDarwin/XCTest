@@ -10,6 +10,7 @@
 #ifndef XCTEST_XCTESTEXPECTATIONINTERNAL_H
 #define XCTEST_XCTESTEXPECTATIONINTERNAL_H
 
+#import <XCTest/XCTestCase.h>
 #import <XCTest/XCTestExpectation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -39,6 +40,24 @@ XCT_EXPORT uint64_t _XCTNextFulfillmentSequence(void);
 /// Reports that the wait expired with this expectation unfulfilled, at most
 /// once per expectation even if it is reused across waits.
 - (void)xct_noteUnderFulfillment;
+
+/// The test that a problem with this expectation belongs to. The test that
+/// created it wins over the thread's current test case, because a callback and
+/// the expiry of a wait are both routinely reached from background queues that
+/// have no current test case of their own. Subclasses use this when they detect
+/// a problem of their own, so a subclass failure is attributed the same way a
+/// base-class one is.
+- (nullable XCTestCase *)_xct_issueReportingTestCase;
+
+/// Called by the waiter once per poll iteration, before it re-reads the
+/// expectations' state.
+///
+/// Most expectations are satisfied by an external callback that calls -fulfill
+/// directly. A few cannot be, because their condition is state rather than an
+/// event: a predicate, for instance, is re-evaluated until it holds rather than
+/// announced once. Those subclasses override this and call -fulfill when their
+/// condition is met. The base implementation does nothing.
+- (void)xct_poll;
 
 @end
 

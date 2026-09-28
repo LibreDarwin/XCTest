@@ -8,10 +8,20 @@ orphans: nothing in the project lists them. This adds the missing half --
 product reference, header/resource references, the four build phases, build
 configurations, the target itself, and the group tree that makes it visible.
 
+The four specialized expectations came after that, so the target this script
+generates has 15 sources and 29 public headers rather than 11 and 25. SOURCES
+and HEADERS above are the single place either list is written down: a new
+public expectation header is picked up automatically, and a new implementation
+has to be added to SOURCES by hand so it also gets an entry in the Makefile
+that a reviewer can check it against.
+
 This is a one-shot: the project file is committed with the result, so the script
 exists to document how the target was generated rather than to be re-run. It
 refuses to run again once a framework target is present rather than producing a
-second one.
+second one. To regenerate after editing SOURCES or HEADERS, check out the
+revision of project.pbxproj from before the target was added, run this over it,
+and commit the result -- a plain re-run would append a duplicate set of build
+files.
 """
 
 import os
@@ -28,7 +38,7 @@ if "com.apple.product-type.framework" in text:
     sys.exit("framework target already present; refusing to double-add")
 
 # ---------------------------------------------------------------- identifiers
-# 0x90+ is free: 0x8B is the highest currently used.
+# 0x100+ is free: 0xF2 (the Foundation build file) is the highest currently used.
 PRODUCT_REF = "1A2B3C4D0000000000000090"
 MODULEMAP_REF = "1A2B3C4D0000000000000091"
 PLIST_REF = "1A2B3C4D0000000000000092"
@@ -54,7 +64,10 @@ TARGET = "1A2B3C4D00000000000000B3"
 # modulemap, no rule at all.
 
 # Sources already have file refs (0x75-0x7F) and build files (0x81-0x8B) from
-# 0a9c5b0. Reuse them rather than minting a second set.
+# 0a9c5b0. Reuse them rather than minting a second set. The four expectations
+# added later have no such pair, so they mint theirs above the ranges already
+# in use: refs 0x100-0x103, build files 0x110-0x113. Keeping them out of
+# 0x75-0x7F/0x81-0x8B is what lets the rewrite below stay exact.
 SOURCES = [
     ("XCTest.m", "1A2B3C4D0000000000000075", "1A2B3C4D0000000000000081"),
     ("XCTestSuite.m", "1A2B3C4D0000000000000076", "1A2B3C4D0000000000000082"),
@@ -67,12 +80,16 @@ SOURCES = [
     ("XCTestExpectation.m", "1A2B3C4D000000000000007D", "1A2B3C4D0000000000000089"),
     ("XCTWaiter.m", "1A2B3C4D000000000000007E", "1A2B3C4D000000000000008A"),
     ("XCTExpectedFailure.m", "1A2B3C4D000000000000007F", "1A2B3C4D000000000000008B"),
+    ("XCTNSNotificationExpectation.m", "1A2B3C4D0000000000000100", "1A2B3C4D0000000000000110"),
+    ("XCTNSPredicateExpectation.m", "1A2B3C4D0000000000000101", "1A2B3C4D0000000000000111"),
+    ("XCTKVOExpectation.m", "1A2B3C4D0000000000000102", "1A2B3C4D0000000000000112"),
+    ("XCTDarwinNotificationExpectation.m", "1A2B3C4D0000000000000103", "1A2B3C4D0000000000000113"),
 ]
 
 public_dir = os.path.join(ROOT, "src", "xctest", "include", "XCTest")
 HEADERS = sorted(f for f in os.listdir(public_dir) if f.endswith(".h"))
-if len(HEADERS) != 25:
-    sys.exit("expected 25 public headers, found %d" % len(HEADERS))
+if len(HEADERS) != 29:
+    sys.exit("expected 29 public headers, found %d" % len(HEADERS))
 
 # Header refs 0xC0.., header build files 0xE0.., so both stay readable in the file.
 header_refs, header_buildfiles = [], []
@@ -142,7 +159,32 @@ for name, ref in zip(HEADERS, header_refs):
         "\t\t%s /* %s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; "
         "path = %s; sourceTree = \"<group>\"; };" % (ref, name, name)
     )
+
+# A source file reference is needed for every entry in SOURCES, and 0a9c5b0 only
+# left 11 of them behind. Emitting a build file and a group child for a reference
+# that does not exist produces a project that still builds -- xcodebuild drops the
+# unknown reference instead of complaining, so the target simply compiles 11
+# sources and every other check passes -- which is why the four expectations were
+# missing from the Xcode binary while the Makefile's copy was complete. Emit the
+# ones that are missing rather than trusting the list to be a subset of the file.
+existing_refs = set(re.findall(r"\t\t(1A2B3C4D[0-9A-F]{16}) /\* .*? \*/ = \{isa = PBXFileReference;", text))
+for name, ref, _ in SOURCES:
+    if ref in existing_refs:
+        continue
+    refs.append(
+        "\t\t%s /* %s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; "
+        "path = %s; sourceTree = \"<group>\"; };" % (ref, name, name)
+    )
 text = insert_in_section(text, "PBXFileReference", "\n".join(refs))
+
+# Now that every reference exists, a dangling fileRef would still be silently
+# dropped rather than diagnosed, so check the one invariant that is not visible
+# from the build log: each source's build file must resolve to a real reference.
+for name, ref, bf in SOURCES:
+    if not re.search(r"%s /\* %s \*/ = \{isa = PBXFileReference;" % (re.escape(ref), re.escape(name)), text):
+        sys.exit("%s: file reference %s was not emitted" % (name, ref))
+    if "fileRef = %s /* %s */" % (ref, name) not in text:
+        sys.exit("%s: build file %s does not point at its reference" % (name, bf))
 
 # --------------------------------------------------------------- new phases
 def phase(ident, isa, files):
