@@ -1,0 +1,30 @@
+# clangd configuration for the XCTest framework sources (src/xctest).
+#
+# The public headers are consumed framework-style -- <XCTest/XCTestDefines.h> --
+# so that client code compiles unmodified against either this framework or
+# Apple's. That only resolves when the header root is on the include path,
+# which the Makefile supplies via -Isrc/xctest/include.
+#
+# Two things this has to get right, both learned the hard way:
+#
+#  * Include paths are resolved against the LSP's working directory (the repo
+#    root), NOT against this file's directory. So the Makefile's spelling has
+#    to be repeated verbatim here; a "include" relative to src/xctest silently
+#    resolves to a nonexistent repo-root/include.
+#
+#  * clangd must be pointed at the Internal SDK. Left on the host macOS SDK it
+#    cannot see <Foundation/Foundation.h> at all, and every header cascades
+#    into "unknown type name NSObject".
+#
+#  * Keep every entry a single well-formed argument. One bad entry (e.g. a
+#    -target= spelling clangd's flag table rejects) makes clangd discard the
+#    entire CompileFlags list, which looks exactly like this file being ignored.
+#
+# The compiler remains the source of truth: `make -C . check-headers`.
+CompileFlags:
+  Compiler: clang
+  Add:
+    - -Isrc/xctest/include
+    - -fobjc-arc
+    - -Wall
+    - -isysroot=/Users/sunneva/xnuports-root/devel/xcode-tools/build/release/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.Internal.sdk
