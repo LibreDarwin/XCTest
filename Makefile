@@ -402,12 +402,19 @@ clangd-config:
 # case statement in the recipe: both make flavours pass it through unchanged,
 # which a make-level conditional assignment could not do here.
 #
-# CONFIGURATION_BUILD_DIR in the project points at build/xcode-<config>, not at
-# build/<config>. Sharing the directory with the Makefile is what made this check
+# CONFIGURATION_BUILD_DIR in the project points at build/xcode-<config>, and its
+# OBJROOT at build/xcode-obj/<config>, neither of which the Makefile uses.
+# Sharing those directories with the Makefile is what made this check
 # untrustworthy: the Xcode product and the make product sat in the same tree, so
 # a stale framework from a previous make could satisfy the smoke test after a
 # failed or skipped xcodebuild. A separate directory plus a clean makes the
 # smoke test describe the binary xcodebuild just produced and nothing else.
+#
+# The intermediates are removed too, not just the product. Cleaning the product
+# alone is what made this check unreliable in the other direction: an object
+# tree that outlived the project edit that should have invalidated it is reused
+# silently, and a source dropped from the target keeps its .o. The build
+# directory is rebuilt from nothing, which is slower and is the point.
 check-xcode:
 	@command -v xcodebuild >/dev/null 2>&1 || \
 		{ echo "check-xcode: xcodebuild not found; install Xcode or use 'make test'"; exit 1; }
@@ -418,7 +425,7 @@ check-xcode:
 		         echo "check-xcode: CONFIG=$(CONFIG) has no Xcode configuration, using Release" ;; \
 	esac; \
 	echo "check-xcode: building XCTest.framework ($$xc) via xcodebuild"; \
-	rm -rf build/xcode-$$dir; \
+	rm -rf "build/xcode-$$dir" "build/xcode-obj/$$dir"; \
 	xcodebuild -project XCTest.xcodeproj -target XCTest -configuration "$$xc" build \
 		| grep -E '^(error|warning):|^\*\* BUILD' || { echo "check-xcode: xcodebuild failed"; exit 1; }; \
 	bash tools/framework-smoke.sh "build/xcode-$$dir/XCTest.framework" "$(SDK)" "$(CC)"; \

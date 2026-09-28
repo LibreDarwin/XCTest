@@ -667,8 +667,11 @@
 				SKIP_INSTALL = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/xcode-debug";
 				GCC_OPTIMIZATION_LEVEL = 0;
+				OBJROOT = "$(SRCROOT)/build/xcode-obj/debug";
 				ONLY_ACTIVE_ARCH = YES;
+
 			};
 			name = Debug;
 		};
@@ -703,7 +706,10 @@
 				SKIP_INSTALL = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/xcode-release";
 				GCC_OPTIMIZATION_LEVEL = 3;
+				OBJROOT = "$(SRCROOT)/build/xcode-obj/release";
+
 			};
 			name = Release;
 		};
@@ -712,7 +718,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/xcode-debug";
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/debug";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c11;
 				GCC_OPTIMIZATION_LEVEL = 0;
@@ -722,7 +728,7 @@
 				);
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				OBJROOT = "$(SRCROOT)/build/obj/debug";
+				OBJROOT = "$(SRCROOT)/build/xcode-obj/debug";
 				SDKROOT = macosx;
 				SYMROOT = "$(SRCROOT)/build";
 			};
@@ -733,13 +739,13 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/xcode-release";
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/release";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c11;
 				GCC_OPTIMIZATION_LEVEL = 3;
 				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				OBJROOT = "$(SRCROOT)/build/obj/release";
+				OBJROOT = "$(SRCROOT)/build/xcode-obj/release";
 				SDKROOT = macosx;
 				SYMROOT = "$(SRCROOT)/build";
 			};

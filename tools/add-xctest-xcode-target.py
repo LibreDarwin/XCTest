@@ -272,26 +272,60 @@ common = """\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.dt.xctest";
 				PRODUCT_NAME = XCTest;
 				SKIP_INSTALL = YES;
-\t\t\t\tVERSIONING_SYSTEM = "apple-generic";
-\t\t\t\tVERSION_INFO_PREFIX = "";"""
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";"""
+
+# The product and the intermediates get their own directories, separate from the
+# ones the Makefile uses. The project's own configurations still point at
+# build/<config> and build/obj/<config>, which is what the Makefile builds into,
+# and 'make check-xcode' cleans only what it is about to rebuild -- so with
+# shared paths a framework left over from a previous make could satisfy the
+# smoke test after xcodebuild had done nothing at all. This is set here rather
+# than by editing the generated project because the documented way to regenerate
+# is to run this over the pre-target revision, which has the shared paths.
+debug_paths = (
+    "\t\t\t\tCONFIGURATION_BUILD_DIR = \"$(SRCROOT)/build/xcode-debug\";\n"
+    "\t\t\t\tGCC_OPTIMIZATION_LEVEL = 0;\n"
+    "\t\t\t\tOBJROOT = \"$(SRCROOT)/build/xcode-obj/debug\";\n"
+    "\t\t\t\tONLY_ACTIVE_ARCH = YES;\n"
+)
+release_paths = (
+    "\t\t\t\tCONFIGURATION_BUILD_DIR = \"$(SRCROOT)/build/xcode-release\";\n"
+    "\t\t\t\tGCC_OPTIMIZATION_LEVEL = 3;\n"
+    "\t\t\t\tOBJROOT = \"$(SRCROOT)/build/xcode-obj/release\";\n"
+)
 
 configs = (
     "\t\t%s /* Debug */ = {\n"
     "\t\t\tisa = XCBuildConfiguration;\n"
     "\t\t\tbuildSettings = {\n%s\n"
-    "\t\t\t\tGCC_OPTIMIZATION_LEVEL = 0;\n"
-    "\t\t\t\tONLY_ACTIVE_ARCH = YES;\n"
     "\t\t\t};\n"
     "\t\t\tname = Debug;\n"
     "\t\t};\n"
     "\t\t%s /* Release */ = {\n"
     "\t\t\tisa = XCBuildConfiguration;\n"
     "\t\t\tbuildSettings = {\n%s\n"
-    "\t\t\t\tGCC_OPTIMIZATION_LEVEL = 3;\n"
     "\t\t\t};\n"
     "\t\t\tname = Release;\n"
     "\t\t};"
-) % (DEBUG_CONFIG, common, RELEASE_CONFIG, common)
+) % (DEBUG_CONFIG, common + "\n" + debug_paths, RELEASE_CONFIG, common + "\n" + release_paths)
+
+# xcodebuild writes its incremental build database under the *project* level
+# OBJROOT even when it is building a single target, so redirecting only the
+# target's settings still left build/obj/<config>/XCBuildData behind in the
+# Makefile's tree. The project level keeps its own CONFIGURATION_BUILD_DIR,
+# which the other targets in this project and the Makefile both rely on, and
+# moves only OBJROOT.
+text = text.replace(
+    'OBJROOT = "$(SRCROOT)/build/obj/debug";',
+    'OBJROOT = "$(SRCROOT)/build/xcode-obj/debug";',
+)
+text = text.replace(
+    'OBJROOT = "$(SRCROOT)/build/obj/release";',
+    'OBJROOT = "$(SRCROOT)/build/xcode-obj/release";',
+)
+if 'build/obj/' in text:
+    sys.exit("project still builds into build/obj; the OBJROOT redirect did not apply")
 
 config_lists = """
 \t\t%s /* Build configuration list for PBXNativeTarget "XCTest" */ = {
