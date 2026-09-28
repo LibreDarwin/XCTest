@@ -8,13 +8,26 @@
 
 XCT_HEADER_AUDIT_BEGIN
 
-// The Internal SDK's reduced Foundation declares none of the KVO API, including
-// the options type used below. A bare forward declaration is safe under both
-// SDKs; the options are only ever passed through to Foundation, never
-// enumerated here. See XCTestFoundationCompat.h for the reduced-SDK spelling.
+// The reduced SDK's Foundation declares none of the KVO API -- not the options
+// type named below, and not the option constants or change-dictionary keys that
+// any caller passing options has to write. Reintroducing only the typedef would
+// leave the initializer unusable from a client, so the whole surface is
+// republished here, and only when it is absent: the full SDK has all of it in
+// NSKeyValueObserving.h, and a second definition would be a hard error. The
+// runtime implements every symbol below, verified by the KVO checks in
+// tools/expectations-test.m.
 #if !__has_include(<Foundation/NSKeyValueObserving.h>)
-typedef NS_OPTIONS(NSUInteger, NSKeyValueObservingOptions);
-#endif
+typedef NS_OPTIONS(NSUInteger, NSKeyValueObservingOptions) {
+    NSKeyValueObservingOptionNew = 0x01,
+    NSKeyValueObservingOptionOld = 0x02,
+    NSKeyValueObservingOptionInitial = 0x04,
+    NSKeyValueObservingOptionPrior = 0x08,
+};
+
+XCT_EXPORT NSString *const NSKeyValueChangeNewKey;
+XCT_EXPORT NSString *const NSKeyValueChangeOldKey;
+XCT_EXPORT NSString *const NSKeyValueChangeKindKey;
+#endif /* !__has_include(<Foundation/NSKeyValueObserving.h>) */
 
 /// Invoked for each observed change. Return YES to fulfill the expectation and
 /// NO to keep waiting. When a handler is set, `expectedValue` is ignored.

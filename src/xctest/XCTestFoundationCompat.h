@@ -57,8 +57,10 @@
 #import <notify.h>
 #endif
 
-// For XCT_EXPORT, used by the NSKeyValueChange* key declarations below.
+// For XCT_EXPORT, and for the KVO options type the categories below are
+// written in terms of, which is declared with the public API that names it.
 #import <XCTest/XCTestDefines.h>
+#import <XCTest/XCTKVOExpectation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -141,28 +143,18 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - Key-value observing
 
 // XCTKVOExpectation registers itself as a KVO observer. The reduced SDK's
-// NSObject.h declares none of this API, and neither NSKeyValueObservingOptions
-// nor the NSKeyValueChange* keys are declared anywhere in the SDK, so all of
-// it has to be reintroduced. A probe confirms the runtime implements it and
-// that changes are delivered synchronously on the mutating thread.
+// NSObject.h declares none of this API, so it all has to be reintroduced. A
+// probe confirms the runtime implements it and that changes are delivered
+// synchronously on the mutating thread.
 //
-// The enum and keys are redeclared only when absent: the full public SDK has
-// them in NSKeyValueObserving.h, and a second definition would be a hard error.
-// The categories are safe either way, since declaring a method a category
+// The options type, its constants and the change-dictionary keys are not
+// repeated here: they are part of XCTKVOExpectation's own API, so a client that
+// passes options needs them too, and they are declared once in
+// <XCTest/XCTKVOExpectation.h>, which every user of them imports. What remains
+// here is the object-level API with no public counterpart.
+//
+// The categories are safe under both SDKs, since declaring a method a category
 // already declares is legal.
-#if !__has_include(<Foundation/NSKeyValueObserving.h>)
-typedef NS_OPTIONS(NSUInteger, NSKeyValueObservingOptions) {
-    NSKeyValueObservingOptionNew = 0x01,
-    NSKeyValueObservingOptionOld = 0x02,
-    NSKeyValueObservingOptionInitial = 0x04,
-    NSKeyValueObservingOptionPrior = 0x08,
-};
-
-XCT_EXPORT NSString *const NSKeyValueChangeNewKey;
-XCT_EXPORT NSString *const NSKeyValueChangeOldKey;
-XCT_EXPORT NSString *const NSKeyValueChangeKindKey;
-#endif /* !__has_include(<Foundation/NSKeyValueObserving.h>) */
-
 @interface NSObject (XCTSDKCompatKVO)
 - (void)addObserver:(NSObject *)observer
          forKeyPath:(NSString *)keyPath
@@ -186,12 +178,10 @@ XCT_EXPORT NSString *const NSKeyValueChangeKindKey;
 
 // XCTNSPredicateExpectation evaluates a predicate against an object. The class
 // is absent from the reduced headers but present and working in the runtime.
-#if !__has_include(<Foundation/NSPredicate.h>)
-@interface NSPredicate : NSObject
-+ (NSPredicate *)predicateWithFormat:(NSString *)format, ...;
-- (BOOL)evaluateWithObject:(nullable id)object;
-@end
-#endif /* !__has_include(<Foundation/NSPredicate.h>) */
+// Its construction and evaluation entry points are declared once, in
+// <XCTest/XCTNSPredicateExpectation.h>, because a client needs them too: the
+// initializer takes an NSPredicate, so a header that only forward-declared the
+// class would make it uncallable from outside the framework.
 
 #pragma mark - Measurements
 

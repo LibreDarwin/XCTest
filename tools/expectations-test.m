@@ -31,21 +31,17 @@ extern uint32_t notify_post(const char *);
 #define NOTIFY_STATUS_OK 0
 #endif
 
-#if !__has_include(<Foundation/NSPredicate.h>)
-@interface NSPredicate : NSObject
-+ (NSPredicate *)predicateWithFormat:(NSString *)format, ...;
-- (BOOL)evaluateWithObject:(id)object;
-@end
-#endif
-
-#if !__has_include(<Foundation/NSKeyValueObserving.h>)
-typedef NS_OPTIONS(NSUInteger, NSKeyValueObservingOptions) {
-    NSKeyValueObservingOptionNew = 0x01,
-    NSKeyValueObservingOptionOld = 0x02,
-    NSKeyValueObservingOptionInitial = 0x04,
-};
-extern NSString *const NSKeyValueChangeNewKey;
-#endif
+// NSPredicate's construction and evaluation entry points are not redeclared
+// here, for the same reason the KVO options are not: they are part of
+// XCTNSPredicateExpectation's public surface, so
+// <XCTest/XCTNSPredicateExpectation.h> declares them when the SDK's Foundation
+// does not, and this file imports it. A local copy would let the harness keep
+// building if that header stopped declaring them, which is the failure
+// tools/expectations-public-client.m exists to catch.
+//
+// The notify(3) declarations above are a different case and stay: nothing in
+// XCTest's public API names a notify symbol, so there is no public header to
+// carry them.
 
 static int failures = 0;
 

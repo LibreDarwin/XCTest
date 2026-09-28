@@ -5,19 +5,28 @@
 
 #import <XCTest/XCTestExpectation.h>
 
-// The Internal SDK's reduced Foundation does not declare NSPredicate, so the
-// include above does not introduce it either. A bare @class is legal even
-// where Foundation later declares the real interface, so this is safe under
-// both SDKs and needs no conditional. It sits outside the audit region because
-// NS_ASSUME_NONNULL does not apply to a forward declaration.
-@class NSPredicate;
-
 XCT_HEADER_AUDIT_BEGIN
 
 /// Consulted before each evaluation. Return YES to fulfill the expectation
 /// without evaluating the predicate, which is how a test forces a completion
 /// that the predicate cannot express, such as a timeout of its own.
 typedef BOOL (^XCT_SWIFT_SENDABLE XCPredicateExpectationHandler)(void);
+
+// The reduced SDK's Foundation declares no NSPredicate at all, so a bare
+// @class would leave this initializer uncallable from a client: there would be
+// no way to make the one argument it needs. The construction and evaluation
+// entry points are republished here, and only when absent, since the full SDK
+// has all of them in NSPredicate.h and a second definition would be a hard
+// error. This is a subset of the real class, not a replacement for it: anything
+// else a client needs is Foundation's to declare, once the SDK declares it.
+#if !__has_include(<Foundation/NSPredicate.h>)
+@interface NSPredicate : NSObject
++ (NSPredicate *)predicateWithFormat:(NSString *)format, ...;
++ (NSPredicate *)predicateWithFormat:(NSString *)format argumentArray:(nullable NSArray *)arguments;
++ (NSPredicate *)predicateWithBlock:(BOOL (^)(id evaluatedObject, NSDictionary<NSString *, id> *_Nullable bindings))block;
+- (BOOL)evaluateWithObject:(nullable id)object;
+@end
+#endif /* !__has_include(<Foundation/NSPredicate.h>) */
 
 @interface XCTNSPredicateExpectation : XCTestExpectation
 
