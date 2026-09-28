@@ -98,6 +98,8 @@ XCTEST_FW_HEADERS := src/xctest/include/XCTest/XCAbstractTest.h \
 	src/xctest/include/XCTest/XCTExpectedFailure.h \
 	src/xctest/include/XCTest/XCTIssue.h \
 	src/xctest/include/XCTest/XCTKVOExpectation.h \
+	src/xctest/include/XCTest/XCTMeasureOptions.h \
+	src/xctest/include/XCTest/XCTMetric.h \
 	src/xctest/include/XCTest/XCTNSNotificationExpectation.h \
 	src/xctest/include/XCTest/XCTNSPredicateExpectation.h \
 	src/xctest/include/XCTest/XCTSourceCodeContext.h \
@@ -129,6 +131,7 @@ XCTEST_FW_OBJS := $(XCTEST_OBJDIR)/XCTest.o $(XCTEST_OBJDIR)/XCTestSuite.o \
 	$(XCTEST_OBJDIR)/XCTestCase.o $(XCTEST_OBJDIR)/XCTestRun.o \
 	$(XCTEST_OBJDIR)/XCTestObservation.o $(XCTEST_OBJDIR)/XCTestAssertions.o \
 	$(XCTEST_OBJDIR)/XCTestInternal.o $(XCTEST_OBJDIR)/XCTestSupportTypes.o \
+	$(XCTEST_OBJDIR)/XCTestMetrics.o \
 	$(XCTEST_OBJDIR)/XCTestExpectation.o $(XCTEST_OBJDIR)/XCTWaiter.o \
 	$(XCTEST_OBJDIR)/XCTNSNotificationExpectation.o \
 	$(XCTEST_OBJDIR)/XCTNSPredicateExpectation.o \
@@ -226,6 +229,13 @@ $(XCTEST_OBJDIR)/XCTestInternal.o: src/xctest/XCTestInternal.m $(XCTEST_FW_HEADE
 $(XCTEST_OBJDIR)/XCTestSupportTypes.o: src/xctest/XCTestSupportTypes.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
 	@mkdir -p $(XCTEST_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestSupportTypes.m
+
+# The performance category adds a category on XCTestCase and reaches the
+# test case's private ivars through accessors, so it depends on XCTestCase.m's
+# interface as well as the compat header it calls -componentsJoinedByString: on.
+$(XCTEST_OBJDIR)/XCTestMetrics.o: src/xctest/XCTestMetrics.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestCase.m
+	@mkdir -p $(XCTEST_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestMetrics.m
 
 $(XCTEST_OBJDIR)/XCTestExpectation.o: src/xctest/XCTestExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
 	@mkdir -p $(XCTEST_OBJDIR)
@@ -386,7 +396,15 @@ check-expectations: $(XCTEST_FW_STAMP)
 check-source-context: $(XCTEST_FW_STAMP)
 	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh
 
-test: check-link smoke check-framework check-expectations check-source-context
+# The measure loop is the only part of XCTest whose result the framework never
+# hands back to the caller, so a harness is the only way to see it work: it
+# drives the block, the options, the manual bounds and a client metric of its own,
+# and reads the private records to check what was measured. Everything else
+# about the measurement API is plain value types that check-link already covers.
+check-metrics: $(XCTEST_FW_STAMP)
+	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh
+
+test: check-link smoke check-framework check-expectations check-source-context check-metrics
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd is already usable, and regenerating it is only
@@ -441,7 +459,8 @@ check-xcode:
 		| grep -E '^(error|warning):|^\*\* BUILD' || { echo "check-xcode: xcodebuild failed"; exit 1; }; \
 	bash tools/framework-smoke.sh "build/xcode-$$dir/XCTest.framework" "$(SDK)" "$(CC)" && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -456,4 +475,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics test clangd-config check-xcode install clean

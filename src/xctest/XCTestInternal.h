@@ -119,6 +119,38 @@ XCT_EXPORT XCTestCase *_Nullable _XCTCurrentTestCase(void);
 XCT_EXPORT XCTSourceCodeContext *_XCTSourceCodeContextAtLocation(const char *filePath,
                                                                  NSUInteger lineNumber);
 
+/// One measure block's results: every measurement every metric reported, across
+/// every measured iteration.
+///
+/// Private because the public API has no way to read measurements back, and
+/// adding one would be a contract Apple does not have. This is what the runner
+/// and the result writer consume.
+@interface XCTPerformanceActivityRecord : NSObject
+- (instancetype)initWithName:(NSString *)name
+                measurements:(NSArray<XCTPerformanceMeasurement *> *)measurements
+               iterationCount:(NSUInteger)iterationCount NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+@property (readonly, copy) NSString *name;
+@property (readonly, copy) NSArray<XCTPerformanceMeasurement *> *measurements;
+@property (readonly) NSUInteger iterationCount;
+@end
+
+@interface XCTestCase (XCTInternalPerformance)
+/// Every measure block run so far by this test case, in order. The discarded
+/// warm-up iteration contributes nothing.
+///
+/// Readwrite privately so the measure loop can append without asking the public
+/// API for a mutation contract it does not have. The accessors live in
+/// XCTestCase.m next to the other per-test state, because a category cannot
+/// declare the ivar that backs it.
+@property (readwrite, copy) NSArray<XCTPerformanceActivityRecord *> *xct_performanceRecords;
+
+/// The measure block currently being run, or nil outside one. `id` rather than
+/// its class so the state class stays private to the implementation file; the
+/// public -startMeasuring and -stopMeasuring reach it only through this.
+@property (nullable, strong) id xct_measureInvocation;
+@end
+
 /// The source context for wherever the runner is now -- used by failure paths
 /// that have no call-site file and line of their own, such as an exception
 /// escaping a test body.

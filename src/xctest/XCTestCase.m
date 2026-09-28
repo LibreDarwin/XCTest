@@ -46,6 +46,14 @@
     NSMutableArray *_expectedFailureScopes;
     NSLock *_expectedFailureLock;
     pthread_t _primaryThread;
+    // Performance measurement state, reached through the
+    // XCTestCase(XCTInternalPerformance) category that XCTestMetrics.m
+    // implements. Declared here for the same reason the expectation-failure
+    // state is: a category cannot declare the ivar backing its property, and
+    // the measure loop and -startMeasuring/-stopMeasuring have to agree on one
+    // piece of state rather than each keeping their own.
+    NSMutableArray<XCTPerformanceActivityRecord *> *_performanceRecords;
+    id _measureInvocation;
 }
 
 #pragma mark - Creation
@@ -482,6 +490,33 @@
 
 + (void)tearDown
 {
+}
+
+#pragma mark - Performance measurement state
+
+- (NSArray<XCTPerformanceActivityRecord *> *)xct_performanceRecords
+{
+    // Lazily created rather than reset in -init: a test case that measures
+    // nothing, which is nearly all of them, should not pay for an array.
+    if (_performanceRecords == nil) {
+        _performanceRecords = [NSMutableArray array];
+    }
+    return [_performanceRecords copy];
+}
+
+- (void)setXct_performanceRecords:(NSArray<XCTPerformanceActivityRecord *> *)records
+{
+    _performanceRecords = [records mutableCopy];
+}
+
+- (id)xct_measureInvocation
+{
+    return _measureInvocation;
+}
+
+- (void)setXct_measureInvocation:(id)measureInvocation
+{
+    _measureInvocation = measureInvocation;
 }
 
 #pragma mark - XCTExpectFailure declarations

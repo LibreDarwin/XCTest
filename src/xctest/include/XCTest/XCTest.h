@@ -10,6 +10,8 @@
 #import <XCTest/XCTestDefines.h>
 #import <XCTest/XCTestErrors.h>
 #import <XCTest/XCTSourceCodeContext.h>
+#import <XCTest/XCTMeasureOptions.h>
+#import <XCTest/XCTMetric.h>
 #import <XCTest/XCTAttachmentLifetime.h>
 #import <XCTest/XCTAttachment.h>
 #import <XCTest/XCTIssue.h>

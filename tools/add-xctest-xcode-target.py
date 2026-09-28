@@ -8,12 +8,17 @@ orphans: nothing in the project lists them. This adds the missing half --
 product reference, header/resource references, the four build phases, build
 configurations, the target itself, and the group tree that makes it visible.
 
-The four specialized expectations came after that, so the target this script
-generates has 15 sources and 29 public headers rather than 11 and 25. SOURCES
-and HEADERS above are the single place either list is written down: a new
-public expectation header is picked up automatically, and a new implementation
-has to be added to SOURCES by hand so it also gets an entry in the Makefile
-that a reviewer can check it against.
+The four specialized expectations and the performance measurement types came
+after that, so the target this script generates has 16 sources and 31 public
+headers rather than 11 and 25. SOURCES and HEADERS above are the single place
+either list is written down: a new public header is picked up automatically, and
+a new implementation has to be added to SOURCES by hand so it also gets an entry
+in the Makefile that a reviewer can check it against.
+
+Header identifiers are numbered by position in the sorted list, so adding a
+header renumbers the ones after it. The churn in the project file is mechanical:
+every moved line keeps its name and its Public attribute and only changes the
+number it is keyed by.
 
 This is a one-shot: the project file is committed with the result, so the script
 exists to document how the target was generated rather than to be re-run. It
@@ -66,8 +71,9 @@ TARGET = "1A2B3C4D00000000000000B3"
 # Sources already have file refs (0x75-0x7F) and build files (0x81-0x8B) from
 # 0a9c5b0. Reuse them rather than minting a second set. The four expectations
 # added later have no such pair, so they mint theirs above the ranges already
-# in use: refs 0x100-0x103, build files 0x110-0x113. Keeping them out of
-# 0x75-0x7F/0x81-0x8B is what lets the rewrite below stay exact.
+# in use: refs 0x100-0x104, build files 0x110-0x114. Keeping them out of
+# 0x75-0x7F/0x81-0x8B is what lets the rewrite below stay exact. XCTestMetrics.m
+# is the fifth such late addition and takes the next pair, 0x104/0x114.
 SOURCES = [
     ("XCTest.m", "1A2B3C4D0000000000000075", "1A2B3C4D0000000000000081"),
     ("XCTestSuite.m", "1A2B3C4D0000000000000076", "1A2B3C4D0000000000000082"),
@@ -84,12 +90,13 @@ SOURCES = [
     ("XCTNSPredicateExpectation.m", "1A2B3C4D0000000000000101", "1A2B3C4D0000000000000111"),
     ("XCTKVOExpectation.m", "1A2B3C4D0000000000000102", "1A2B3C4D0000000000000112"),
     ("XCTDarwinNotificationExpectation.m", "1A2B3C4D0000000000000103", "1A2B3C4D0000000000000113"),
+    ("XCTestMetrics.m", "1A2B3C4D0000000000000104", "1A2B3C4D0000000000000114"),
 ]
 
 public_dir = os.path.join(ROOT, "src", "xctest", "include", "XCTest")
 HEADERS = sorted(f for f in os.listdir(public_dir) if f.endswith(".h"))
-if len(HEADERS) != 29:
-    sys.exit("expected 29 public headers, found %d" % len(HEADERS))
+if len(HEADERS) != 31:
+    sys.exit("expected 31 public headers, found %d" % len(HEADERS))
 
 # Header refs 0xC0.., header build files 0xE0.., so both stay readable in the file.
 header_refs, header_buildfiles = [], []

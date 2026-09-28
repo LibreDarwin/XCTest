@@ -12,6 +12,8 @@
 #import <XCTest/XCTIssue.h>
 #import <XCTest/XCTestAssertions.h>
 #import <XCTest/XCTestSkipping.h>
+#import <XCTest/XCTMetric.h>
+#import <XCTest/XCTMeasureOptions.h>
 
 XCT_HEADER_AUDIT_BEGIN
 
@@ -61,6 +63,73 @@ XCT_HEADER_AUDIT_BEGIN
 @property (class, readonly) XCTestSuite *defaultTestSuite;
 + (void)setUp;
 + (void)tearDown;
+@end
+
+/// Performance measurement: invoke a block repeatedly and report what it cost.
+///
+/// There are two generations of this API in one category, and they are not
+/// interchangeable. The `XCTPerformanceMetric` string family predates the
+/// `XCTMetric` object family; both are here because test bundles in the wild use
+/// both, and a runner that implemented only the new one would silently measure
+/// nothing for the old one. `measureBlock:` is the old entry point and routes
+/// through to the same machinery, so a test that uses it gets the same
+/// iteration count, the same discarded warm-up, and the same results.
+@interface XCTestCase (XCTPerformanceAnalysis)
+
+/// The name of a metric the string-based API can measure.
+typedef NSString * XCTPerformanceMetric NS_TYPED_EXTENSIBLE_ENUM;
+
+/// Wall clock seconds between -startMeasuring and -stopMeasuring.
+XCT_EXPORT XCTPerformanceMetric const XCTPerformanceMetric_WallClockTime;
+
+/// The string metrics -measureBlock: measures. Defaults to just
+/// XCTPerformanceMetric_WallClockTime. Override to change what -measureBlock:
+/// does, which is the supported way to add a metric without rewriting the call
+/// site.
+@property (class, readonly, copy) NSArray<XCTPerformanceMetric> *defaultPerformanceMetrics;
+
+/// Measure `block` with +defaultPerformanceMetrics.
+- (void)measureBlock:(XCT_NOESCAPE void (^)(void))block;
+
+/// Measure `block` with the named metrics.
+///
+/// Passing NO for `automaticallyStartMeasuring` means the block must call
+/// -startMeasuring itself. A block that never calls it is a test failure rather
+/// than a measurement of nothing, since the alternative is a number that looks
+/// real and means nothing. A block that calls it anyway is also a failure.
+/// An unrecognized metric name is a test failure.
+- (void)measureMetrics:(NSArray<XCTPerformanceMetric> *)metrics
+    automaticallyStartMeasuring:(BOOL)automaticallyStartMeasuring
+                     forBlock:(XCT_NOESCAPE void (^)(void))block;
+
+/// Mark the start of the measured region, from inside a measure block.
+- (void)startMeasuring;
+
+/// Mark the end of the measured region, from inside a measure block. Calling
+/// this more than once per iteration is a test failure.
+- (void)stopMeasuring;
+
+/// The object metrics -measureWithMetrics:block: and friends use by default.
+/// Defaults to a single XCTClockMetric.
+@property (class, readonly, copy) NSArray<id<XCTMetric>> *defaultMetrics;
+
+/// A fresh copy of the recommended measure options. Override to change the
+/// iteration count or the invocation options for every measurement in a class.
+@property (class, readonly, copy) XCTMeasureOptions *defaultMeasureOptions;
+
+/// Measure `block` with `metrics` and +defaultMeasureOptions.
+- (void)measureWithMetrics:(NSArray<id<XCTMetric>> *)metrics
+                     block:(XCT_NOESCAPE void (^)(void))block;
+
+/// Measure `block` with +defaultMetrics and `options`.
+- (void)measureWithOptions:(XCTMeasureOptions *)options
+                     block:(XCT_NOESCAPE void (^)(void))block;
+
+/// Measure `block` with `metrics` and `options`.
+- (void)measureWithMetrics:(NSArray<id<XCTMetric>> *)metrics
+                   options:(XCTMeasureOptions *)options
+                     block:(XCT_NOESCAPE void (^)(void))block;
+
 @end
 
 XCT_HEADER_AUDIT_END

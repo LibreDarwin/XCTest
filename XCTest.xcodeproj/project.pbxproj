@@ -22,6 +22,7 @@
 		1A2B3C4D0000000000000111 /* XCTNSPredicateExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000101 /* XCTNSPredicateExpectation.m */; };
 		1A2B3C4D0000000000000112 /* XCTKVOExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000102 /* XCTKVOExpectation.m */; };
 		1A2B3C4D0000000000000113 /* XCTDarwinNotificationExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000103 /* XCTDarwinNotificationExpectation.m */; };
+		1A2B3C4D0000000000000114 /* XCTestMetrics.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000104 /* XCTestMetrics.m */; };
 		1A2B3C4D00000000000000E00 /* XCAbstractTest.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C00 /* XCAbstractTest.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4D00000000000000E01 /* XCTActivity.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C01 /* XCTActivity.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4D00000000000000E02 /* XCTAttachment.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C02 /* XCTAttachment.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -31,26 +32,28 @@
 		1A2B3C4D00000000000000E06 /* XCTExpectedFailure.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C06 /* XCTExpectedFailure.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4D00000000000000E07 /* XCTIssue.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C07 /* XCTIssue.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4D00000000000000E08 /* XCTKVOExpectation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C08 /* XCTKVOExpectation.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E09 /* XCTNSNotificationExpectation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C09 /* XCTNSNotificationExpectation.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E0A /* XCTNSPredicateExpectation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0A /* XCTNSPredicateExpectation.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E0B /* XCTSourceCodeContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0B /* XCTSourceCodeContext.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E0C /* XCTWaiter.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0C /* XCTWaiter.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E0D /* XCTest.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0D /* XCTest.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E0E /* XCTestAssertions.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0E /* XCTestAssertions.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E0F /* XCTestAssertionsImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0F /* XCTestAssertionsImpl.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E10 /* XCTestCase.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C10 /* XCTestCase.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E11 /* XCTestCaseRun.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C11 /* XCTestCaseRun.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E12 /* XCTestDefines.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C12 /* XCTestDefines.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E13 /* XCTestErrors.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C13 /* XCTestErrors.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E14 /* XCTestExpectation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C14 /* XCTestExpectation.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E15 /* XCTestObservation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C15 /* XCTestObservation.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E16 /* XCTestObservationCenter.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C16 /* XCTestObservationCenter.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E17 /* XCTestObserver.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C17 /* XCTestObserver.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E18 /* XCTestRun.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C18 /* XCTestRun.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E19 /* XCTestSkipping.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C19 /* XCTestSkipping.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E1A /* XCTestSkippingImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1A /* XCTestSkippingImpl.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E1B /* XCTestSuite.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1B /* XCTestSuite.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4D00000000000000E1C /* XCTestSuiteRun.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1C /* XCTestSuiteRun.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E09 /* XCTMeasureOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C09 /* XCTMeasureOptions.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E0A /* XCTMetric.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0A /* XCTMetric.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E0B /* XCTNSNotificationExpectation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0B /* XCTNSNotificationExpectation.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E0C /* XCTNSPredicateExpectation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0C /* XCTNSPredicateExpectation.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E0D /* XCTSourceCodeContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0D /* XCTSourceCodeContext.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E0E /* XCTWaiter.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0E /* XCTWaiter.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E0F /* XCTest.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C0F /* XCTest.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E10 /* XCTestAssertions.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C10 /* XCTestAssertions.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E11 /* XCTestAssertionsImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C11 /* XCTestAssertionsImpl.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E12 /* XCTestCase.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C12 /* XCTestCase.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E13 /* XCTestCaseRun.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C13 /* XCTestCaseRun.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E14 /* XCTestDefines.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C14 /* XCTestDefines.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E15 /* XCTestErrors.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C15 /* XCTestErrors.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E16 /* XCTestExpectation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C16 /* XCTestExpectation.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E17 /* XCTestObservation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C17 /* XCTestObservation.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E18 /* XCTestObservationCenter.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C18 /* XCTestObservationCenter.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E19 /* XCTestObserver.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C19 /* XCTestObserver.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E1A /* XCTestRun.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1A /* XCTestRun.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E1B /* XCTestSkipping.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1B /* XCTestSkipping.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E1C /* XCTestSkippingImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1C /* XCTestSkippingImpl.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E1D /* XCTestSuite.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1D /* XCTestSuite.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4D00000000000000E1E /* XCTestSuiteRun.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C1E /* XCTestSuiteRun.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4D00000000000000F2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000093 /* Foundation.framework */; };
 		1A2B3C4D000000000000005F /* xcresult.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000018 /* xcresult.c */; };
 		1A2B3C4D0000000000000060 /* bkeyed.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000019 /* bkeyed.c */; };
@@ -90,30 +93,33 @@
 		1A2B3C4D00000000000000C06 /* XCTExpectedFailure.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTExpectedFailure.h; sourceTree = "<group>"; };
 		1A2B3C4D00000000000000C07 /* XCTIssue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTIssue.h; sourceTree = "<group>"; };
 		1A2B3C4D00000000000000C08 /* XCTKVOExpectation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTKVOExpectation.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C09 /* XCTNSNotificationExpectation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTNSNotificationExpectation.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C0A /* XCTNSPredicateExpectation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTNSPredicateExpectation.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C0B /* XCTSourceCodeContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTSourceCodeContext.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C0C /* XCTWaiter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTWaiter.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C0D /* XCTest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTest.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C0E /* XCTestAssertions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestAssertions.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C0F /* XCTestAssertionsImpl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestAssertionsImpl.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C10 /* XCTestCase.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCase.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C11 /* XCTestCaseRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCaseRun.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C12 /* XCTestDefines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestDefines.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C13 /* XCTestErrors.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestErrors.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C14 /* XCTestExpectation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestExpectation.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C15 /* XCTestObservation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestObservation.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C16 /* XCTestObservationCenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestObservationCenter.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C17 /* XCTestObserver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestObserver.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C18 /* XCTestRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestRun.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C19 /* XCTestSkipping.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSkipping.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C1A /* XCTestSkippingImpl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSkippingImpl.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C1B /* XCTestSuite.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSuite.h; sourceTree = "<group>"; };
-		1A2B3C4D00000000000000C1C /* XCTestSuiteRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSuiteRun.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C09 /* XCTMeasureOptions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTMeasureOptions.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C0A /* XCTMetric.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTMetric.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C0B /* XCTNSNotificationExpectation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTNSNotificationExpectation.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C0C /* XCTNSPredicateExpectation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTNSPredicateExpectation.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C0D /* XCTSourceCodeContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTSourceCodeContext.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C0E /* XCTWaiter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTWaiter.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C0F /* XCTest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTest.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C10 /* XCTestAssertions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestAssertions.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C11 /* XCTestAssertionsImpl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestAssertionsImpl.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C12 /* XCTestCase.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCase.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C13 /* XCTestCaseRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCaseRun.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C14 /* XCTestDefines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestDefines.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C15 /* XCTestErrors.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestErrors.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C16 /* XCTestExpectation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestExpectation.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C17 /* XCTestObservation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestObservation.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C18 /* XCTestObservationCenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestObservationCenter.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C19 /* XCTestObserver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestObserver.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C1A /* XCTestRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestRun.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C1B /* XCTestSkipping.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSkipping.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C1C /* XCTestSkippingImpl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSkippingImpl.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C1D /* XCTestSuite.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSuite.h; sourceTree = "<group>"; };
+		1A2B3C4D00000000000000C1E /* XCTestSuiteRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSuiteRun.h; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000100 /* XCTNSNotificationExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTNSNotificationExpectation.m; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000101 /* XCTNSPredicateExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTNSPredicateExpectation.m; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000102 /* XCTKVOExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTKVOExpectation.m; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000103 /* XCTDarwinNotificationExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTDarwinNotificationExpectation.m; sourceTree = "<group>"; };
+		1A2B3C4D0000000000000104 /* XCTestMetrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestMetrics.m; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000018 /* xcresult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xcresult.c; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000019 /* bkeyed.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bkeyed.c; sourceTree = "<group>"; };
 		1A2B3C4D000000000000001A /* xccov.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xccov.c; sourceTree = "<group>"; };
@@ -187,26 +193,28 @@
 				1A2B3C4D00000000000000E06 /* XCTExpectedFailure.h in Headers */,
 				1A2B3C4D00000000000000E07 /* XCTIssue.h in Headers */,
 				1A2B3C4D00000000000000E08 /* XCTKVOExpectation.h in Headers */,
-				1A2B3C4D00000000000000E09 /* XCTNSNotificationExpectation.h in Headers */,
-				1A2B3C4D00000000000000E0A /* XCTNSPredicateExpectation.h in Headers */,
-				1A2B3C4D00000000000000E0B /* XCTSourceCodeContext.h in Headers */,
-				1A2B3C4D00000000000000E0C /* XCTWaiter.h in Headers */,
-				1A2B3C4D00000000000000E0D /* XCTest.h in Headers */,
-				1A2B3C4D00000000000000E0E /* XCTestAssertions.h in Headers */,
-				1A2B3C4D00000000000000E0F /* XCTestAssertionsImpl.h in Headers */,
-				1A2B3C4D00000000000000E10 /* XCTestCase.h in Headers */,
-				1A2B3C4D00000000000000E11 /* XCTestCaseRun.h in Headers */,
-				1A2B3C4D00000000000000E12 /* XCTestDefines.h in Headers */,
-				1A2B3C4D00000000000000E13 /* XCTestErrors.h in Headers */,
-				1A2B3C4D00000000000000E14 /* XCTestExpectation.h in Headers */,
-				1A2B3C4D00000000000000E15 /* XCTestObservation.h in Headers */,
-				1A2B3C4D00000000000000E16 /* XCTestObservationCenter.h in Headers */,
-				1A2B3C4D00000000000000E17 /* XCTestObserver.h in Headers */,
-				1A2B3C4D00000000000000E18 /* XCTestRun.h in Headers */,
-				1A2B3C4D00000000000000E19 /* XCTestSkipping.h in Headers */,
-				1A2B3C4D00000000000000E1A /* XCTestSkippingImpl.h in Headers */,
-				1A2B3C4D00000000000000E1B /* XCTestSuite.h in Headers */,
-				1A2B3C4D00000000000000E1C /* XCTestSuiteRun.h in Headers */,
+				1A2B3C4D00000000000000E09 /* XCTMeasureOptions.h in Headers */,
+				1A2B3C4D00000000000000E0A /* XCTMetric.h in Headers */,
+				1A2B3C4D00000000000000E0B /* XCTNSNotificationExpectation.h in Headers */,
+				1A2B3C4D00000000000000E0C /* XCTNSPredicateExpectation.h in Headers */,
+				1A2B3C4D00000000000000E0D /* XCTSourceCodeContext.h in Headers */,
+				1A2B3C4D00000000000000E0E /* XCTWaiter.h in Headers */,
+				1A2B3C4D00000000000000E0F /* XCTest.h in Headers */,
+				1A2B3C4D00000000000000E10 /* XCTestAssertions.h in Headers */,
+				1A2B3C4D00000000000000E11 /* XCTestAssertionsImpl.h in Headers */,
+				1A2B3C4D00000000000000E12 /* XCTestCase.h in Headers */,
+				1A2B3C4D00000000000000E13 /* XCTestCaseRun.h in Headers */,
+				1A2B3C4D00000000000000E14 /* XCTestDefines.h in Headers */,
+				1A2B3C4D00000000000000E15 /* XCTestErrors.h in Headers */,
+				1A2B3C4D00000000000000E16 /* XCTestExpectation.h in Headers */,
+				1A2B3C4D00000000000000E17 /* XCTestObservation.h in Headers */,
+				1A2B3C4D00000000000000E18 /* XCTestObservationCenter.h in Headers */,
+				1A2B3C4D00000000000000E19 /* XCTestObserver.h in Headers */,
+				1A2B3C4D00000000000000E1A /* XCTestRun.h in Headers */,
+				1A2B3C4D00000000000000E1B /* XCTestSkipping.h in Headers */,
+				1A2B3C4D00000000000000E1C /* XCTestSkippingImpl.h in Headers */,
+				1A2B3C4D00000000000000E1D /* XCTestSuite.h in Headers */,
+				1A2B3C4D00000000000000E1E /* XCTestSuiteRun.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};/* End PBXHeadersBuildPhase section */
@@ -261,6 +269,7 @@
 				1A2B3C4D0000000000000101 /* XCTNSPredicateExpectation.m */,
 				1A2B3C4D0000000000000102 /* XCTKVOExpectation.m */,
 				1A2B3C4D0000000000000103 /* XCTDarwinNotificationExpectation.m */,
+				1A2B3C4D0000000000000104 /* XCTestMetrics.m */,
 				1A2B3C4D0000000000000095 /* include */,
 				1A2B3C4D0000000000000091 /* module.modulemap */,
 				1A2B3C4D0000000000000092 /* Info.plist */,
@@ -288,26 +297,28 @@
 				1A2B3C4D00000000000000C06 /* XCTExpectedFailure.h */,
 				1A2B3C4D00000000000000C07 /* XCTIssue.h */,
 				1A2B3C4D00000000000000C08 /* XCTKVOExpectation.h */,
-				1A2B3C4D00000000000000C09 /* XCTNSNotificationExpectation.h */,
-				1A2B3C4D00000000000000C0A /* XCTNSPredicateExpectation.h */,
-				1A2B3C4D00000000000000C0B /* XCTSourceCodeContext.h */,
-				1A2B3C4D00000000000000C0C /* XCTWaiter.h */,
-				1A2B3C4D00000000000000C0D /* XCTest.h */,
-				1A2B3C4D00000000000000C0E /* XCTestAssertions.h */,
-				1A2B3C4D00000000000000C0F /* XCTestAssertionsImpl.h */,
-				1A2B3C4D00000000000000C10 /* XCTestCase.h */,
-				1A2B3C4D00000000000000C11 /* XCTestCaseRun.h */,
-				1A2B3C4D00000000000000C12 /* XCTestDefines.h */,
-				1A2B3C4D00000000000000C13 /* XCTestErrors.h */,
-				1A2B3C4D00000000000000C14 /* XCTestExpectation.h */,
-				1A2B3C4D00000000000000C15 /* XCTestObservation.h */,
-				1A2B3C4D00000000000000C16 /* XCTestObservationCenter.h */,
-				1A2B3C4D00000000000000C17 /* XCTestObserver.h */,
-				1A2B3C4D00000000000000C18 /* XCTestRun.h */,
-				1A2B3C4D00000000000000C19 /* XCTestSkipping.h */,
-				1A2B3C4D00000000000000C1A /* XCTestSkippingImpl.h */,
-				1A2B3C4D00000000000000C1B /* XCTestSuite.h */,
-				1A2B3C4D00000000000000C1C /* XCTestSuiteRun.h */,
+				1A2B3C4D00000000000000C09 /* XCTMeasureOptions.h */,
+				1A2B3C4D00000000000000C0A /* XCTMetric.h */,
+				1A2B3C4D00000000000000C0B /* XCTNSNotificationExpectation.h */,
+				1A2B3C4D00000000000000C0C /* XCTNSPredicateExpectation.h */,
+				1A2B3C4D00000000000000C0D /* XCTSourceCodeContext.h */,
+				1A2B3C4D00000000000000C0E /* XCTWaiter.h */,
+				1A2B3C4D00000000000000C0F /* XCTest.h */,
+				1A2B3C4D00000000000000C10 /* XCTestAssertions.h */,
+				1A2B3C4D00000000000000C11 /* XCTestAssertionsImpl.h */,
+				1A2B3C4D00000000000000C12 /* XCTestCase.h */,
+				1A2B3C4D00000000000000C13 /* XCTestCaseRun.h */,
+				1A2B3C4D00000000000000C14 /* XCTestDefines.h */,
+				1A2B3C4D00000000000000C15 /* XCTestErrors.h */,
+				1A2B3C4D00000000000000C16 /* XCTestExpectation.h */,
+				1A2B3C4D00000000000000C17 /* XCTestObservation.h */,
+				1A2B3C4D00000000000000C18 /* XCTestObservationCenter.h */,
+				1A2B3C4D00000000000000C19 /* XCTestObserver.h */,
+				1A2B3C4D00000000000000C1A /* XCTestRun.h */,
+				1A2B3C4D00000000000000C1B /* XCTestSkipping.h */,
+				1A2B3C4D00000000000000C1C /* XCTestSkippingImpl.h */,
+				1A2B3C4D00000000000000C1D /* XCTestSuite.h */,
+				1A2B3C4D00000000000000C1E /* XCTestSuiteRun.h */,
 			);
 			path = XCTest;
 			sourceTree = "<group>";
@@ -581,6 +592,7 @@
 				1A2B3C4D0000000000000111 /* XCTNSPredicateExpectation.m in Sources */,
 				1A2B3C4D0000000000000112 /* XCTKVOExpectation.m in Sources */,
 				1A2B3C4D0000000000000113 /* XCTDarwinNotificationExpectation.m in Sources */,
+				1A2B3C4D0000000000000114 /* XCTestMetrics.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -25,13 +25,15 @@
 // So the methods below all work; they are simply not declared, and without a
 // declaration the compiler rejects the call.
 //
-// "Mostly" is doing real work in that sentence, and the exception is what makes
-// this file worth reading closely. This runtime is not upstream: it is missing
-// behaviour as well as declarations. NSMeasurement and NSUnit exist, but neither
-// +[NSUnit secondsUnit] nor +[NSMeasurement measurementWithUnit:doubleValue:] is
-// present and NSUnitSeconds is not registered at all, so a metric cannot be
-// written the way upstream writes it. See the Measurements section for the
-// initializers that do survive and the way the code is shaped around them.
+// "Mostly" is doing real work in that sentence. This runtime is not upstream, and
+// the one place it is missing *behaviour* rather than declarations is
+// NSMeasurement: the classes exist, but neither +[NSUnit secondsUnit] nor
+// +[NSMeasurement measurementWithUnit:doubleValue:] is present and NSUnitSeconds
+// is not registered at all, so code cannot construct a unit the way upstream does.
+// What survives is -[NSUnit initWithSymbol:] and
+// -[NSMeasurement initWithDoubleValue:unit:], which is how the performance metric
+// headers have to be written; see XCTMetric.h, where those two classes are now
+// declared, since a public API mentioning a type has to declare it.
 //
 // Everything the reduced headers do declare is a strict subset of upstream
 // Foundation, so this file only ever adds back omissions -- it never contradicts
@@ -182,43 +184,6 @@ NS_ASSUME_NONNULL_BEGIN
 // <XCTest/XCTNSPredicateExpectation.h>, because a client needs them too: the
 // initializer takes an NSPredicate, so a header that only forward-declared the
 // class would make it uncallable from outside the framework.
-
-#pragma mark - Measurements
-
-// XCTClockMetric hands back elapsed time as an NSMeasurement in seconds, so
-// both classes are needed. This is the one place the reduced runtime is not
-// merely missing declarations but missing *behaviour*, and the difference
-// decides how the metric has to be written.
-//
-// Upstream constructs these through class methods:
-//     +[NSUnit secondsUnit]
-//     +[NSMeasurement measurementWithUnit:doubleValue:]
-// A probe finds none of those present, and NSUnitSeconds is not registered at
-// all. What survives is the instance initializers:
-//     -[NSUnit initWithSymbol:]
-//     -[NSMeasurement initWithDoubleValue:unit:]
-// and the arithmetic, e.g. 10s - 1.5s = 8.5.
-//
-// So the metric builds its unit with -initWithSymbol: rather than +secondsUnit.
-// That spelling works on the upstream runtime too, which is what keeps this
-// single implementation valid under both SDKs. The unit is then treated as an
-// opaque object the metric only stores and reads back.
-#if !__has_include(<Foundation/NSMeasurement.h>)
-@interface NSUnit : NSObject
-- (instancetype)initWithSymbol:(NSString *)symbol;
-@property (readonly, copy) NSString *symbol;
-@end
-
-@interface NSMeasurement : NSObject
-- (instancetype)initWithDoubleValue:(double)value unit:(NSUnit *)unit;
-@property (readonly) double doubleValue;
-@property (readonly, retain) NSUnit *unit;
-- (NSMeasurement *)measurementByAddingMeasurement:(NSMeasurement *)other;
-- (NSMeasurement *)measurementBySubtractingMeasurement:(NSMeasurement *)other;
-- (NSMeasurement *)measurementByConvertingToUnit:(NSUnit *)unit;
-- (BOOL)canBeConvertedToUnit:(NSUnit *)unit;
-@end
-#endif /* !__has_include(<Foundation/NSMeasurement.h>) */
 
 #pragma mark - Darwin notifications
 
