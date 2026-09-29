@@ -1,0 +1,22 @@
+// Copyright (C) 2026, LibreDarwin
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Module map for XCTestCore.framework.
+//
+// This file is installed as XCTestCore.framework/Modules/module.modulemap, so
+// the umbrella header below is resolved relative to the framework's Headers
+// directory. It is what makes "@import XCTestCore;" work for the xctest agent
+// and for anything else that links the private side of a test run.
+//
+// The framework links Foundation and nothing else. Apple's XCTestCore links the
+// public XCTest.framework too, because its driver runs test cases; this slice is
+// the value type that describes a run, which references no XCTest class at all,
+// so the dependency is not invented here. It gets added when the driver lands,
+// in the direction that matters: a test bundle links XCTest, XCTest links
+// XCTestCore, and nothing ever links back.
+
+framework module XCTestCore {
+  umbrella header "XCTestConfiguration.h"
+  export *
+  module * { export * }
+}

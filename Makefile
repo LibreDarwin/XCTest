@@ -139,6 +139,39 @@ XCTEST_FW_OBJS := $(XCTEST_OBJDIR)/XCTest.o $(XCTEST_OBJDIR)/XCTestSuite.o \
 	$(XCTEST_OBJDIR)/XCTDarwinNotificationExpectation.o \
 	$(XCTEST_OBJDIR)/XCTExpectedFailure.o
 
+# XCTestCore.framework is Apple's private half of a test run: it holds the value
+# that describes a run and the driver that executes it, and no test author ever
+# compiles against it. It is a separate framework rather than part of XCTest
+# because that separation is load-bearing -- see the note on the dependency
+# direction in the module map.
+#
+# It gets its own object directory for the same reason XCTest.framework does: the
+# two are built from a different include root, and sharing a .o between them
+# would mean a header edit on one side silently deciding the other's build.
+XCTESTCORE_OBJDIR := $(BUILD_DIR)/obj-xctestcore
+XCTESTCORE_OBJCFLAGS := $(OPT) -fobjc-arc -fobjc-exceptions -fblocks -isysroot "$(SDK)" \
+	  -Isrc/xctestcore/include -Isrc/xctestcore -Wall -Wextra
+
+# The same versioned-bundle shape as XCTest.framework, with an @rpath install
+# name for the same reason. Foundation is the only link: this slice is value
+# types, so there is nothing here to justify a dependency on the public
+# XCTest.framework, and adding one would make the private framework look like
+# something a test bundle could load.
+XCTESTCORE_FW_DIR  := $(BUILD_DIR)/XCTestCore.framework
+XCTESTCORE_FW_VER  := $(XCTESTCORE_FW_DIR)/Versions/A
+XCTESTCORE_FW      := $(XCTESTCORE_FW_VER)/XCTestCore
+XCTESTCORE_FW_STAMP := $(XCTESTCORE_FW_DIR)/.stamp
+XCTESTCORE_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTestCore.framework/Versions/A/XCTestCore" -framework Foundation
+
+# One installed header, which is also the module map's umbrella. The private
+# header stays in src/xctestcore: it declares Foundation members for this
+# implementation's own use, and a client that needs one is a client we cannot
+# support the same way twice.
+XCTESTCORE_FW_HEADERS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h
+XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h
+
+XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o
+
 XCCOV        := $(BUILD_DIR)/xccov
 XCCOV_OBJS   := $(OBJDIR)/xcresult.o $(OBJDIR)/bkeyed.o $(OBJDIR)/xccov.o
 
@@ -162,7 +195,7 @@ LIBZSTD_OBJS := $(OBJDIR)/zstd_debug.o $(OBJDIR)/zstd_entropy_common.o \
 PREFIX  ?= /usr/local
 DESTDIR ?=
 
-all: $(XCCOV) $(XCRESULTTOOL) $(XCTEST_FW_STAMP)
+all: $(XCCOV) $(XCRESULTTOOL) $(XCTEST_FW_STAMP) $(XCTESTCORE_FW_STAMP)
 
 # The bundle is assembled into a stamp file rather than being a make target in
 # its own right: a framework is a directory, and every make variant treats a
@@ -268,6 +301,32 @@ $(XCTEST_OBJDIR)/XCTDarwinNotificationExpectation.o: src/xctest/XCTDarwinNotific
 $(XCTEST_OBJDIR)/XCTExpectedFailure.o: src/xctest/XCTExpectedFailure.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
 	@mkdir -p $(XCTEST_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTExpectedFailure.m
+
+# XCTestCore.framework is assembled the same way, for the same reason a
+# framework cannot be a make target in its own right: its stamp goes stale
+# exactly when the bundle does.
+$(XCTESTCORE_FW_STAMP): $(XCTESTCORE_FW) src/xctestcore/module.modulemap src/xctestcore/Info.plist $(XCTESTCORE_FW_HEADERS)
+	@mkdir -p $(XCTESTCORE_FW_VER)/Headers $(XCTESTCORE_FW_VER)/Modules $(XCTESTCORE_FW_VER)/Resources
+	cp $(XCTESTCORE_FW_HEADERS) $(XCTESTCORE_FW_VER)/Headers
+	cp src/xctestcore/module.modulemap $(XCTESTCORE_FW_VER)/Modules/module.modulemap
+	cp src/xctestcore/Info.plist $(XCTESTCORE_FW_VER)/Resources/Info.plist
+	rm -f $(XCTESTCORE_FW_DIR)/Versions/Current
+	ln -s A $(XCTESTCORE_FW_DIR)/Versions/Current
+	rm -f $(XCTESTCORE_FW_DIR)/Headers $(XCTESTCORE_FW_DIR)/Modules \
+		$(XCTESTCORE_FW_DIR)/Resources $(XCTESTCORE_FW_DIR)/XCTestCore
+	ln -s Versions/Current/Headers $(XCTESTCORE_FW_DIR)/Headers
+	ln -s Versions/Current/Modules $(XCTESTCORE_FW_DIR)/Modules
+	ln -s Versions/Current/Resources $(XCTESTCORE_FW_DIR)/Resources
+	ln -s Versions/Current/XCTestCore $(XCTESTCORE_FW_DIR)/XCTestCore
+	@touch $@
+
+$(XCTESTCORE_FW): $(XCTESTCORE_FW_OBJS)
+	@mkdir -p $(XCTESTCORE_FW_VER)
+	$(CC) $(XCTESTCORE_OBJCFLAGS) $(XCTESTCORE_FW_LDFLAGS) -o $@ $(XCTESTCORE_FW_OBJS)
+
+$(XCTESTCORE_OBJDIR)/XCTestConfiguration.o: src/xctestcore/XCTestConfiguration.m $(XCTESTCORE_FW_HEADERS) $(XCTESTCORE_PRIV_HDRS)
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfiguration.m
 
 $(XCCOV): $(XCCOV_OBJS) $(LIBZSTD)
 	@mkdir -p $(BUILD_DIR)
@@ -404,7 +463,25 @@ check-source-context: $(XCTEST_FW_STAMP)
 check-metrics: $(XCTEST_FW_STAMP)
 	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics
+# A test configuration is a value that crosses a process boundary as a plist and
+# is then read back to decide what runs, so nothing about it is observable from
+# this process: a harness is the only way to see it work. It drives the derived
+# values (-testMode, -testBundleName), the secure-coding round trip including the
+# partial-archive fallback, -isEqual:/copy and the ordering helpers.
+check-configuration: $(XCTESTCORE_FW_STAMP)
+	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh
+
+# The implementation has to compile on its own terms, and every function the headers
+# export has to exist, or a caller only reaches it by luck. check-headers and
+# check-macros prove the declarations are well-formed; this proves the definitions
+# are there, for both XCTest and XCTestCore. It needs no framework, since it
+# compiles from source, and it used to be run by hand only -- which is how a
+# dead check survived: its set comparison was a no-op, so it passed for months
+# without ever comparing anything.
+check-sources:
+	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
+
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd is already usable, and regenerating it is only
@@ -453,14 +530,17 @@ check-xcode:
 		*)       xc=Release; dir=release; \
 		         echo "check-xcode: CONFIG=$(CONFIG) has no Xcode configuration, using Release" ;; \
 	esac; \
-	echo "check-xcode: building XCTest.framework ($$xc) via xcodebuild"; \
-	rm -rf "build/xcode-$$dir" "build/xcode-obj/$$dir"; \
-	xcodebuild -project XCTest.xcodeproj -target XCTest -configuration "$$xc" build \
-		| grep -E '^(error|warning):|^\*\* BUILD' || { echo "check-xcode: xcodebuild failed"; exit 1; }; \
+	echo "check-xcode: building XCTest.framework and XCTestCore.framework ($$xc) via xcodebuild"; \
+	rm -rf "build/xcode-$$dir" "build/xcode-obj/$$dir" "build/xcode-obj/$$dir-xctestcore"; \
+	for t in XCTest XCTestCore; do \
+		xcodebuild -project XCTest.xcodeproj -target $$t -configuration "$$xc" build \
+			| grep -E '^(error|warning):|^\*\* BUILD' || { echo "check-xcode: xcodebuild failed for $$t"; exit 1; }; \
+	done; \
 	bash tools/framework-smoke.sh "build/xcode-$$dir/XCTest.framework" "$(SDK)" "$(CC)" && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -471,8 +551,12 @@ install: all
 	rm -rf $(DESTDIR)$(PREFIX)/lib/XCTest.framework
 	install -d $(DESTDIR)$(PREFIX)/lib
 	cp -R $(XCTEST_FW_DIR) $(DESTDIR)$(PREFIX)/lib/XCTest.framework
+	# Both frameworks, in one cp -R each, for the reason noted above: the trees
+	# are made of relative symlinks that install cannot reproduce.
+	rm -rf $(DESTDIR)$(PREFIX)/lib/XCTestCore.framework
+	cp -R $(XCTESTCORE_FW_DIR) $(DESTDIR)$(PREFIX)/lib/XCTestCore.framework
 
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-sources test clangd-config check-xcode install clean

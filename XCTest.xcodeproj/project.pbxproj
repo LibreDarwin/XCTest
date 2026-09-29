@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000075 /* XCTestConfiguration.m */; };
+		1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000F2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000093 /* Foundation.framework */; };
 		1A2B3C4D0000000000000081 /* XCTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000075 /* XCTest.m */; };
 		1A2B3C4D0000000000000082 /* XCTestSuite.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000076 /* XCTestSuite.m */; };
 		1A2B3C4D0000000000000083 /* XCTestCase.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000077 /* XCTestCase.m */; };
@@ -80,6 +83,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1A2B3C4E0000000000000090 /* XCTestCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = XCTestCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A2B3C4E0000000000000091 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.module-map; path = module.modulemap; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000092 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000075 /* XCTestConfiguration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestConfiguration.m; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestConfiguration.h; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000090 /* XCTest.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = XCTest.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D0000000000000091 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.module-map; path = module.modulemap; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000092 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -180,6 +188,15 @@
 /* End PBXFileReference section */
 
 /* Begin PBXHeadersBuildPhase section */
+
+		1A2B3C4E00000000000000A0 /* PBXHeaders */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		1A2B3C4D00000000000000A0 /* PBXHeaders */ = {
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
@@ -221,6 +238,15 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 
+		1A2B3C4E00000000000000A2 /* PBXFrameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4E00000000000000F2 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
 		1A2B3C4D00000000000000A2 /* PBXFrameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -250,6 +276,34 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+
+		1A2B3C4E0000000000000094 /* xctestcore */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4E0000000000000075 /* XCTestConfiguration.m */,
+				1A2B3C4E0000000000000095 /* include */,
+				1A2B3C4E0000000000000091 /* module.modulemap */,
+				1A2B3C4E0000000000000092 /* Info.plist */,
+			);
+			path = xctestcore;
+			sourceTree = "<group>";
+		};
+		1A2B3C4E0000000000000095 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4E0000000000000096 /* XCTestCore */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+		1A2B3C4E0000000000000096 /* XCTestCore */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */,
+			);
+			path = XCTestCore;
+			sourceTree = "<group>";
+		};
 
 		1A2B3C4D0000000000000094 /* xctest */ = {
 			isa = PBXGroup;
@@ -338,6 +392,7 @@
 				1A2B3C4D0000000000000043 /* xcresulttool */,
 				1A2B3C4D0000000000000044 /* libzstd.a */,
 				1A2B3C4D0000000000000090 /* XCTest.framework */,
+				1A2B3C4E0000000000000090 /* XCTestCore.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -350,6 +405,7 @@
 				1A2B3C4D0000000000000013 /* xcresulttool */,
 				1A2B3C4D0000000000000016 /* zstd */,
 				1A2B3C4D0000000000000094 /* xctest */,
+				1A2B3C4E0000000000000094 /* xctestcore */,
 			);
 			path = src;
 			sourceTree = "<group>";
@@ -443,6 +499,25 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+
+		1A2B3C4E00000000000000B3 /* XCTestCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A2B3C4E00000000000000B2 /* Build configuration list for PBXNativeTarget "XCTestCore" */;
+			buildPhases = (
+				1A2B3C4E00000000000000A0 /* Headers */,
+				1A2B3C4E00000000000000A1 /* Sources */,
+				1A2B3C4E00000000000000A2 /* Frameworks */,
+				1A2B3C4E00000000000000A3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = XCTestCore;
+			productName = XCTestCore;
+			productReference = 1A2B3C4E0000000000000090 /* XCTestCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
 
 		1A2B3C4D00000000000000B3 /* XCTest */ = {
 			isa = PBXNativeTarget;
@@ -567,11 +642,21 @@
 				1A2B3C4D0000000000000050 /* xcresulttool */,
 				1A2B3C4D0000000000000054 /* libzstd */,
 				1A2B3C4D00000000000000B3 /* XCTest */,
+				1A2B3C4E00000000000000B3 /* XCTestCore */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+
+		1A2B3C4E00000000000000A1 /* PBXSources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 
 		1A2B3C4D00000000000000A1 /* PBXSources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -638,6 +723,15 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
+
+		1A2B3C4E00000000000000A3 /* PBXResources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		1A2B3C4D00000000000000A3 /* PBXResources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -648,6 +742,83 @@
 		};/* End PBXResourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		1A2B3C4E00000000000000B0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_EXCEPTIONS = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_VERSION = A;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src/xctestcore",
+					"$(SRCROOT)/src/xctestcore/include",
+				);
+				INFOPLIST_FILE = "$(SRCROOT)/src/xctestcore/Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MODULEMAP_FILE = "$(SRCROOT)/src/xctestcore/module.modulemap";
+				OTHER_CFLAGS = (
+					-Wall,
+					-Wextra,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.dt.xctestcore";
+				PRODUCT_NAME = XCTestCore;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/xcode-debug";
+				GCC_OPTIMIZATION_LEVEL = 0;
+				OBJROOT = "$(SRCROOT)/build/xcode-obj/debug-xctestcore";
+				ONLY_ACTIVE_ARCH = YES;
+
+		};
+			name = Debug;
+		};
+		1A2B3C4E00000000000000B1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_EXCEPTIONS = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_VERSION = A;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/src/xctestcore",
+					"$(SRCROOT)/src/xctestcore/include",
+				);
+				INFOPLIST_FILE = "$(SRCROOT)/src/xctestcore/Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MODULEMAP_FILE = "$(SRCROOT)/src/xctestcore/module.modulemap";
+				OTHER_CFLAGS = (
+					-Wall,
+					-Wextra,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.dt.xctestcore";
+				PRODUCT_NAME = XCTestCore;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+				CONFIGURATION_BUILD_DIR = "$(SRCROOT)/build/xcode-release";
+				GCC_OPTIMIZATION_LEVEL = 3;
+				OBJROOT = "$(SRCROOT)/build/xcode-obj/release-xctestcore";
+
+		};
+			name = Release;
+		};
 		1A2B3C4D00000000000000B0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -903,6 +1074,16 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+
+		1A2B3C4E00000000000000B2 /* Build configuration list for PBXNativeTarget "XCTestCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4E00000000000000B0 /* Debug */,
+				1A2B3C4E00000000000000B1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 
 		1A2B3C4D00000000000000B2 /* Build configuration list for PBXNativeTarget "XCTest" */ = {
 			isa = XCConfigurationList;
