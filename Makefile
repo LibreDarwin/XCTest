@@ -164,20 +164,21 @@ XCTESTCORE_FW_STAMP := $(XCTESTCORE_FW_DIR)/.stamp
 XCTESTCORE_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTestCore.framework/Versions/A/XCTestCore" -framework Foundation
 
 # The installed headers, and the module map's umbrella. The umbrella is listed
-# after the two headers it imports, which is the order a reader wants but not
-# the order anything depends on -- make does not care, and the header guard does
+# after the headers it imports, which is the order a reader wants but not the
+# order anything depends on -- make does not care, and the header guard does
 # the rest. The private header stays in src/xctestcore: it declares Foundation
 # members for this implementation's own use, and a client that needs one is a
 # client we cannot support the same way twice.
-XCTESTCORE_VALUE_HDRS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h \
+XCTESTCORE_API_HDRS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h \
+	src/xctestcore/include/XCTestCore/XCTestConfigurationLoader.h \
 	src/xctestcore/include/XCTestCore/XCTTestSelection.h
-XCTESTCORE_FW_HEADERS := $(XCTESTCORE_VALUE_HDRS) src/xctestcore/include/XCTestCore/XCTestCore.h
+XCTESTCORE_FW_HEADERS := $(XCTESTCORE_API_HDRS) src/xctestcore/include/XCTestCore/XCTestCore.h
 XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h
 
 # One object per source, spelled out. A pattern rule would be shorter and would
 # not build under bmake, and the whole reason this project builds under both is
 # that nothing here depends on a GNU extension.
-XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o $(XCTESTCORE_OBJDIR)/XCTTestSelection.o
+XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o $(XCTESTCORE_OBJDIR)/XCTestConfigurationLoader.o $(XCTESTCORE_OBJDIR)/XCTTestSelection.o
 
 XCCOV        := $(BUILD_DIR)/xccov
 XCCOV_OBJS   := $(OBJDIR)/xcresult.o $(OBJDIR)/bkeyed.o $(OBJDIR)/xccov.o
@@ -335,13 +336,21 @@ $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o: src/xctestcore/XCTestConfiguration.m
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfiguration.m
 
-# Depends on the value headers rather than on $(XCTESTCORE_FW_HEADERS): the
-# umbrella imports both, so a rule that named it as a prerequisite would claim
-# this object changes when only the umbrella's comment does. Cheap to be wrong
-# about in the other direction, not in this one.
-$(XCTESTCORE_OBJDIR)/XCTTestSelection.o: src/xctestcore/XCTTestSelection.m $(XCTESTCORE_VALUE_HDRS) $(XCTESTCORE_PRIV_HDRS)
+# Depends on the API headers rather than on $(XCTESTCORE_FW_HEADERS): the
+# umbrella imports all of them, so a rule that named it as a prerequisite would
+# claim this object changes when only the umbrella's comment does. Cheap to be
+# wrong about in the other direction, not in this one.
+$(XCTESTCORE_OBJDIR)/XCTTestSelection.o: src/xctestcore/XCTTestSelection.m $(XCTESTCORE_API_HDRS) $(XCTESTCORE_PRIV_HDRS)
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTTestSelection.m
+
+# The loader is the one XCTestCore unit that reaches for os_log and dispatch, so
+# it is also the one whose header dependency is worth naming exactly: it imports
+# the loader header, which imports both value headers, so the API list covers it
+# without the umbrella being dragged in.
+$(XCTESTCORE_OBJDIR)/XCTestConfigurationLoader.o: src/xctestcore/XCTestConfigurationLoader.m $(XCTESTCORE_API_HDRS) $(XCTESTCORE_PRIV_HDRS)
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfigurationLoader.m
 
 $(XCCOV): $(XCCOV_OBJS) $(LIBZSTD)
 	@mkdir -p $(BUILD_DIR)
@@ -502,6 +511,16 @@ check-selection: $(XCTESTCORE_FW_STAMP)
 check-builder: $(XCTESTCORE_FW_STAMP)
 	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-builder.sh
 
+# The loader is the first XCTestCore unit with behaviour, and the only one whose
+# interesting cases are decisions rather than values. Everything it does is
+# invisible from the framework: it reads the process environment, a temporary
+# directory and a plug-in directory, and answers with a configuration or nil. A
+# harness is the only way to see any of it, and it has to own where the binary
+# sits -- NSBundle.mainBundle decides source 4 -- which is why the runner copies
+# the binary per scenario and sweeps the account's temporary directory afterwards.
+check-loader: $(XCTESTCORE_FW_STAMP)
+	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-loader.sh
+
 # The implementation has to compile on its own terms, and every function the headers
 # export has to exist, or a caller only reaches it by luck. check-headers and
 # check-macros prove the declarations are well-formed; this proves the definitions
@@ -512,7 +531,7 @@ check-builder: $(XCTESTCORE_FW_STAMP)
 check-sources:
 	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-sources
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd is already usable, and regenerating it is only
@@ -573,7 +592,8 @@ check-xcode:
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-selection.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-builder.sh
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-builder.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-loader.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -592,4 +612,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-sources test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-sources test clangd-config check-xcode install clean

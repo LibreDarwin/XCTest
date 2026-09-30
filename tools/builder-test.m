@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 // Checks the parsing and accumulation a `-only-testing:` loop does, which is
-// what XCTTestConfigurationLoader calls and the reason any of it exists.
+// what XCTestConfigurationLoader calls and the reason any of it exists.
 //
 // The cases that matter are the ones where the two spellings disagree: a Swift
 // test that an Objective-C runner also has, a parameterized test whose name ends

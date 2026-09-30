@@ -8,17 +8,18 @@
 // directory. It is what makes "@import XCTestCore;" work for the xctest agent
 // and for anything else that links the private side of a test run.
 //
-// The umbrella is XCTestCore.h rather than either value header. A module map
-// declares exactly one umbrella, and naming one of the two value types would
-// leave the other reachable only by naming its file -- which works, and is not
+// The umbrella is XCTestCore.h rather than one of the three headers it imports.
+// A module map declares exactly one umbrella, and naming any of the others would
+// leave the rest reachable only by naming their files -- which works, and is not
 // something a client should have to know.
 //
 // The framework links Foundation and nothing else. Apple's XCTestCore links the
 // public XCTest.framework too, because its driver runs test cases; this slice is
-// the value type that describes a run, which references no XCTest class at all,
-// so the dependency is not invented here. It gets added when the driver lands,
-// in the direction that matters: a test bundle links XCTest, XCTest links
-// XCTestCore, and nothing ever links back.
+// the value type that describes a run and the loader that finds it, neither of
+// which references a single XCTest class, so the dependency is not invented
+// here. It gets added when the driver lands, in the direction that matters: a
+// test bundle links XCTest, XCTest links XCTestCore, and nothing ever links
+// back.
 
 framework module XCTestCore {
   umbrella header "XCTestCore.h"

@@ -169,10 +169,11 @@ FOUNDATION_EXPORT NSString * const NSURLContentModificationDateKey;
 // has to survive a process boundary that has no opinion about files.
 //
 // As above, the options are NSUInteger because the reduced SDK omits
-// NSDataReadingOptions and NSDataBase64DecodingOptions. All three are called
-// with 0 here, which for the base64 case is the strict reading: it rejects
-// anything outside the alphabet instead of skipping over it, and a
-// configuration that needed forgiving was not produced by the reference.
+// NSDataReadingOptions and NSDataBase64DecodingOptions. The uncached read is
+// spelled as its value where it is used, not here, because only that one caller
+// asks for it. For the base64 case the options are 0, which is the strict
+// reading: it rejects anything outside the alphabet instead of skipping over it,
+// and a configuration that needed forgiving was not produced by the reference.
 @interface NSData (XCTCoreSDKCompat)
 + (nullable NSData *)dataWithContentsOfFile:(NSString *)path
                                    options:(NSUInteger)options
@@ -182,6 +183,20 @@ FOUNDATION_EXPORT NSString * const NSURLContentModificationDateKey;
                                     error:(out NSError **)error;
 - (nullable instancetype)initWithBase64EncodedString:(NSString *)base64EncodedString
                                              options:(NSUInteger)options;
+@end
+
+// The exception currently being handled, which a @catch needs in order to say
+// what went wrong.
+//
+// The reduced NSException.h stops at -name/-reason/-userInfo and omits both this
+// and -exceptionDescription, so a @catch in this tree can name what it caught
+// and nothing about it. The reference reads the same thing through
+// __XCTGetCurrentExceptionReasonWithFallback, which is private to XCTest's
+// assertion plumbing; +currentExceptionPointer is the public spelling underneath
+// it, and the underlying runtime answers it -- a category declaration is enough
+// to get past the compiler.
+@interface NSException (XCTCoreSDKCompat)
++ (nullable NSException *)currentExceptionPointer;
 @end
 
 NS_ASSUME_NONNULL_END
