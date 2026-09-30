@@ -438,7 +438,17 @@ static void test_measure_block_runs_warmup_plus_iterations(void)
 {
     MeasureFixture *testCase = newFixture();
     __block NSUInteger runs = 0;
-    [testCase measureBlock:^{ runs++; }];
+    // The block has to take real time, and `runs++` does not: it is sometimes
+    // one clock tick wide and sometimes none at all. A monotonic clock that has
+    // not ticked reports a zero-length interval, so the "above zero" half of
+    // the wall-clock assertion below was a race -- it passed about one run in
+    // five against a Release xcodebuild of this framework, and passed every time
+    // against a Debug make build, which is a difference in the block, not in the
+    // metric. 2ms is about four orders of magnitude above the resolution that
+    // produced the zeros and four below the 5s upper bound, so the number is
+    // reliably positive without the check turning into a test of how fast the
+    // machine is.
+    [testCase measureBlock:^{ runs++; usleep(2000); }];
 
     ok("measureBlock: runs 5 measured iterations plus 1 warm-up", runs == 6,
        [NSString stringWithFormat:@"%lu runs", (unsigned long)runs]);
