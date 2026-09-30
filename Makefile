@@ -534,9 +534,9 @@ check-sources:
 test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
-# committed src/xctest/.clangd is already usable, and regenerating it is only
-# needed when the SDK above changes. Kept out of `all` so a plain build never
-# rewrites a tracked file.
+# committed src/xctest/.clangd and src/xctestcore/.clangd are already usable,
+# and regenerating them is only needed when the SDK above changes. Kept out of
+# `all` so a plain build never rewrites a tracked file.
 clangd-config:
 	@SDK="$(SDK)" bash tools/gen-clangd-config.sh
 
