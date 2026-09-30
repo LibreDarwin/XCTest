@@ -496,6 +496,12 @@ check-configuration: $(XCTESTCORE_FW_STAMP)
 check-selection: $(XCTESTCORE_FW_STAMP)
 	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-selection.sh
 
+# The builder and the string parsers, which check-selection cannot reach: a
+# selection read from a -only-testing: argument is a string, and no archive
+# carries one.
+check-builder: $(XCTESTCORE_FW_STAMP)
+	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-builder.sh
+
 # The implementation has to compile on its own terms, and every function the headers
 # export has to exist, or a caller only reaches it by luck. check-headers and
 # check-macros prove the declarations are well-formed; this proves the definitions
@@ -506,7 +512,7 @@ check-selection: $(XCTESTCORE_FW_STAMP)
 check-sources:
 	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-sources
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd is already usable, and regenerating it is only
@@ -566,7 +572,8 @@ check-xcode:
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-selection.sh
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-selection.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-builder.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -585,4 +592,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-sources test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-sources test clangd-config check-xcode install clean

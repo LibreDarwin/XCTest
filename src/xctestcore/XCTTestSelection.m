@@ -687,7 +687,201 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
 
 @end
 
+#pragma mark - XCTTestIdentifierCreation
+
+/// Strips the module from a Swift class name: `MyTests.MyTestsCase` becomes
+/// `MyTestsCase`, and a name with no dot is returned unchanged. Only the first
+/// component goes, because only the first is the module: a type nested in
+/// another type still needs its outer type spelled to be found.
+static NSString *_XCTClassNameWithoutModuleFromClassName(NSString *className)
+{
+    NSRange moduleSeparator = [className rangeOfString:@"."];
+    if (moduleSeparator.location == NSNotFound) {
+        return className;
+    }
+    NSUInteger startOfName = moduleSeparator.location + 1;
+    if (className.length <= startOfName) {
+        // A trailing dot names nothing, so there is no name to return.
+        return className;
+    }
+    return [className substringFromIndex:startOfName];
+}
+
+@implementation XCTTestIdentifier (XCTTestIdentifierCreation)
+
+- (instancetype)initWithStringRepresentation:(NSString *)stringRepresentation
+{
+    return [self initWithStringRepresentation:stringRepresentation
+                        preserveModulePrefix:NO];
+}
+
+- (instancetype)initWithStringRepresentation:(NSString *)stringRepresentation
+                        preserveModulePrefix:(BOOL)preserveModulePrefix
+{
+    if (stringRepresentation == nil) {
+        [[NSException exceptionWithName:NSInternalInconsistencyException
+                                 reason:@"a test identifier needs a string to be made of"
+                               userInfo:nil] raise];
+        return nil;
+    }
+
+    if (stringRepresentation.length == 0) {
+        return nil;
+    }
+    NSArray<NSString *> *components = [stringRepresentation componentsSeparatedByString:@"/"];
+    if (components.count > 2) {
+        // An Objective-C identifier names a class and at most one method. A
+        // deeper path is a suite path, which is spelled with a different
+        // method and is not this one.
+        return nil;
+    }
+    if ([components.firstObject hasSuffix:@")"]) {
+        // A suite is spelled by its own name; a name ending in a paren is a
+        // method, and a method cannot be the outer component of anything.
+        return nil;
+    }
+    if (![components.lastObject hasSuffix:@":)"]) {
+        // A `:)` suffix is how a parameterized Swift test spells its input, and
+        // that is not a method name an Objective-C runner can ask for.
+        return [self _initWithClassAndMethodComponents:components
+                                preserveModulePrefix:preserveModulePrefix];
+    }
+    return nil;
+}
+
+- (instancetype)initWithSwiftTestingStringRepresentation:(NSString *)stringRepresentation
+{
+    if (stringRepresentation == nil) {
+        [[NSException exceptionWithName:NSInternalInconsistencyException
+                                 reason:@"a test identifier needs a string to be made of"
+                               userInfo:nil] raise];
+        return nil;
+    }
+
+    if (stringRepresentation.length == 0) {
+        return nil;
+    }
+    NSArray<NSString *> *components = [stringRepresentation componentsSeparatedByString:@"/"];
+
+    // The suffix is what says which of the two things this is, and it is kept:
+    // the identifier the archive stores has to still be able to tell a
+    // parameterized test from a plain one.
+    XCTTestIdentifierOptions options = XCTTestIdentifierOptionContainer;
+    if ([components.lastObject hasSuffix:@":)"]) {
+        options = XCTTestIdentifierOptionContainer | XCTTestIdentifierOptionSwiftMethod;
+    } else if ([components.lastObject hasSuffix:@")"]) {
+        options = 0;
+    }
+    return [self initWithComponents:components argumentIDs:nil options:options];
+}
+
+/// The core of the Objective-C spelling, and where the two options the
+/// identifier carries come from: a single component is a container, two are a
+/// class and a method, and either the class was spelled with its module or the
+/// method with an empty argument list only when the caller is describing Swift
+/// Testing's own output.
+- (instancetype)_initWithClassAndMethodComponents:(NSArray<NSString *> *)components
+                           preserveModulePrefix:(BOOL)preserveModulePrefix
+{
+    // As in XCTTestExecutionOrderingToString: this SDK declares
+    // NSAssertionFailure but does not export it, so the same failure is raised
+    // here rather than reached through the assertion handler.
+    if (self == nil) {
+        [[NSException exceptionWithName:NSInternalInconsistencyException
+                                 reason:@"an identifier has to be allocated before it is made"
+                               userInfo:nil] raise];
+        return nil;
+    }
+    if (components.count == 0) {
+        [[NSException exceptionWithName:NSInternalInconsistencyException
+                                 reason:@"an identifier needs at least one component"
+                               userInfo:nil] raise];
+        return nil;
+    }
+
+    NSString *rawClassName = components[0];
+    NSString *className = rawClassName;
+    // Whether the string named a module, or a `()`, either of which is how Swift
+    // Testing spells something the Objective-C runner spells differently.
+    BOOL isSwiftSpelling = NO;
+    if (!preserveModulePrefix) {
+        NSString *classNameWithoutModule = _XCTClassNameWithoutModuleFromClassName(rawClassName);
+        if (![classNameWithoutModule isEqualToString:rawClassName]) {
+            className = classNameWithoutModule;
+            isSwiftSpelling = YES;
+        }
+    }
+
+    NSString *methodName = nil;
+    NSString *unadornedMethodName = nil;
+    if (components.count == 2) {
+        methodName = components[1];
+        if ([methodName hasSuffix:@"()"]) {
+            unadornedMethodName = [methodName substringToIndex:methodName.length - @"()".length];
+            isSwiftSpelling = YES;
+        } else {
+            unadornedMethodName = methodName;
+        }
+    }
+
+    NSArray<NSString *> *identifierComponents = components;
+    if (isSwiftSpelling) {
+        // At least one component named something extra, so the components as
+        // given are not the ones the identifier is built from.
+        if (components.count == 2) {
+            identifierComponents = @[className, unadornedMethodName];
+        } else {
+            identifierComponents = @[className];
+        }
+    }
+
+    XCTTestIdentifierOptions options;
+    NSSet<NSData *> *argumentIDs;
+    if (components.count == 1) {
+        options = XCTTestIdentifierOptionContainer | XCTTestIdentifierOptionClassAndMethod;
+        argumentIDs = nil;
+    } else {
+        options = XCTTestIdentifierOptionClassAndMethod;
+        // Present but empty, to distinguish "no arguments" from "not a
+        // parameterized test", which the Swift Testing spelling relies on.
+        argumentIDs = [NSSet set];
+    }
+    if (isSwiftSpelling && unadornedMethodName != nil) {
+        options |= XCTTestIdentifierOptionSwiftMethod;
+    }
+    return [self initWithComponents:identifierComponents
+                        argumentIDs:argumentIDs
+                            options:options];
+}
+
+- (XCTTestIdentifier *)swiftMethodCounterpart
+{
+    if (!self.usesClassAndMethodSemantics || self.componentCount != 2 || !self.isSwiftMethod) {
+        // A suite is not a method under another spelling, and a method that is
+        // not already a Swift one has no Swift reading to give.
+        return nil;
+    }
+    // The same components and the same arguments, read as Swift. For an
+    // identifier that came from -initWithStringRepresentation: that is the
+    // identifier itself, and the copy is the point: the reading is forced here
+    // rather than inherited, so a subclass that reports different option bits
+    // for the same components still gets the Swift reading asked for.
+    return [[XCTTestIdentifier alloc] initWithComponents:self.components
+                                             argumentIDs:self.argumentIDs
+                                                 options:self.options | XCTTestIdentifierOptionSwiftMethod];
+}
+
+@end
+
 #pragma mark - XCTTestIdentifierSet
+
+/// Declared rather than left to the compiler so XCTTestIdentifierSetBuilder, in
+/// this same file, can be seen to be overriding it and not inventing a method
+/// that happens to share a name. Private to XCTestCore, and not in the installed
+/// header: it names storage, and storage is not part of the contract.
+@interface XCTTestIdentifierSet ()
+- (NSMutableSet<XCTTestIdentifier *> *)xctMutableIdentifiers;
+@end
 
 @implementation XCTTestIdentifierSet
 {
@@ -697,6 +891,22 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     // that for free along with -hash and -isEqual:, which the array has to
     // hand-roll and which every later method would otherwise have to trust.
     NSMutableSet<XCTTestIdentifier *> *_identifiers;
+}
+
+/// The one place in this class that names its own storage.
+///
+/// Everything below reads through this rather than touching -_identifiers, and
+/// that is not a style preference: XCTTestIdentifierSetBuilder is a subclass
+/// holding its own collection, and a subclass's ivar is not the superclass's.
+/// An inherited method that read -_identifiers directly would answer from the
+/// builder's empty superclass storage -- -sortedIdentifiers on a builder with
+/// three identifiers in it would come back empty, with nothing to indicate it
+/// had gone wrong. Routing every read through one overridable method is what
+/// lets the builder inherit the ~dozen query methods that follow and have them
+/// mean what they say.
+- (NSMutableSet<XCTTestIdentifier *> *)xctMutableIdentifiers
+{
+    return _identifiers;
 }
 
 - (instancetype)init
@@ -709,13 +919,14 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     self = [super init];
     if (self) {
         _identifiers = [NSMutableSet setWithCapacity:identifiers.count];
+        NSMutableSet<XCTTestIdentifier *> *storage = self.xctMutableIdentifiers;
         // Re-adding through the setter rather than the ivar: a nil element in
         // the array is a corrupt archive, and -moreserve capacity aside the
         // difference only shows up in a crash that would otherwise happen here
         // instead of at the point of use.
         for (XCTTestIdentifier *identifier in identifiers) {
             if (identifier != nil) {
-                [_identifiers addObject:identifier];
+                [storage addObject:identifier];
             }
         }
     }
@@ -763,7 +974,7 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
 
 - (NSUInteger)count
 {
-    return self->_identifiers.count;
+    return self.xctMutableIdentifiers.count;
 }
 
 - (NSArray<XCTTestIdentifier *> *)sortedIdentifiers
@@ -771,7 +982,7 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     // Sorted by identifier string, with -compare: rather than a localized
     // compare: the order has to be the same on every machine, and a localized
     // one depends on the locale of whoever is reading.
-    return [self->_identifiers.allObjects sortedArrayUsingComparator:^NSComparisonResult(XCTTestIdentifier *a,
+    return [self.xctMutableIdentifiers.allObjects sortedArrayUsingComparator:^NSComparisonResult(XCTTestIdentifier *a,
                                                                                            XCTTestIdentifier *b) {
         NSComparisonResult result = [a.identifierString compare:b.identifierString];
         // Two identifiers can share a string and still differ -- that is what
@@ -809,7 +1020,7 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
 
 - (BOOL)isEmpty
 {
-    return self->_identifiers.count == 0;
+    return self.xctMutableIdentifiers.count == 0;
 }
 
 - (BOOL)containsTestIdentifier:(XCTTestIdentifier *)identifier
@@ -817,7 +1028,7 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     if (identifier == nil) {
         return NO;
     }
-    return [self->_identifiers containsObject:identifier];
+    return [self.xctMutableIdentifiers containsObject:identifier];
 }
 
 - (BOOL)containsTestIdentifier:(XCTTestIdentifier *)identifier
@@ -835,7 +1046,7 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     // "Does this set name something inside -identifier". Answered by walking
     // the set once rather than by asking the set for a subtree, because the set
     // is unordered and has no index to walk down.
-    for (XCTTestIdentifier *candidate in self->_identifiers) {
+    for (XCTTestIdentifier *candidate in self.xctMutableIdentifiers) {
         if ([candidate isAncestorOfTestIdentifier:identifier]) {
             return YES;
         }
@@ -848,7 +1059,9 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     if (other == nil) {
         return NO;
     }
-    return [self->_identifiers isSubsetOfSet:other->_identifiers];
+    // -other may be a builder holding its own collection, so this asks it
+    // through the same hook rather than reaching past it into its storage.
+    return [self.xctMutableIdentifiers isSubsetOfSet:other.xctMutableIdentifiers];
 }
 
 - (XCTTestIdentifierSet *)setByAddingTestIdentifiersFromSet:(XCTTestIdentifierSet *)other
@@ -856,7 +1069,7 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     if (other == nil) {
         return self;
     }
-    NSMutableArray<XCTTestIdentifier *> *identifiers = [self->_identifiers.allObjects mutableCopy];
+    NSMutableArray<XCTTestIdentifier *> *identifiers = [self.xctMutableIdentifiers.allObjects mutableCopy];
     [identifiers addObjectsFromArray:other.sortedIdentifiers];
     return [[[self class] alloc] initWithArray:identifiers];
 }
@@ -928,12 +1141,12 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     }
     // Set equality, so enumeration order cannot make two identical selections
     // compare unequal.
-    return [self->_identifiers isEqualToSet:((XCTTestIdentifierSet *)object)->_identifiers];
+    return [self.xctMutableIdentifiers isEqualToSet:((XCTTestIdentifierSet *)object).xctMutableIdentifiers];
 }
 
 - (NSUInteger)hash
 {
-    return self->_identifiers.hash;
+    return self.xctMutableIdentifiers.hash;
 }
 
 - (id)copyWithZone:(NSZone *)zone
@@ -955,7 +1168,7 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     // already implements exactly that. Writing the loop here would be a second
     // implementation of an ABI whose subtleties are the part most likely to be
     // misremembered.
-    return [self->_identifiers countByEnumeratingWithState:state objects:buffer count:len];
+    return [self.xctMutableIdentifiers countByEnumeratingWithState:state objects:buffer count:len];
 }
 
 - (NSString *)description
@@ -967,6 +1180,181 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     return [NSString stringWithFormat:@"<%@: %p; %lu identifier(s):\n\t%@\n>",
                                       NSStringFromClass(self.class), self, (unsigned long)self.count,
                                       [lines componentsJoinedByString:@"\n\t"]];
+}
+
+@end
+
+#pragma mark - XCTTestIdentifierSetBuilder
+
+@implementation XCTTestIdentifierSetBuilder
+{
+    NSMutableSet<XCTTestIdentifier *> *_testIdentifiers;
+}
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self) {
+        _testIdentifiers = [NSMutableSet set];
+    }
+    return self;
+}
+
+- (instancetype)initWithSet:(XCTTestIdentifierSet *)set
+{
+    self = [self init];
+    if (self) {
+        [self unionSet:set];
+    }
+    return self;
+}
+
+- (instancetype)initWithTestIdentifier:(XCTTestIdentifier *)identifier
+{
+    self = [self init];
+    if (self) {
+        [self addTestIdentifier:identifier];
+    }
+    return self;
+}
+
+- (instancetype)initWithTestIdentifierSet:(XCTTestIdentifierSet *)set
+{
+    return [self initWithSet:set];
+}
+
+- (NSMutableSet<XCTTestIdentifier *> *)xctMutableIdentifiers
+{
+    return _testIdentifiers;
+}
+
+- (void)addTestIdentifier:(XCTTestIdentifier *)identifier
+{
+    if (identifier != nil) {
+        [_testIdentifiers addObject:identifier];
+    }
+}
+
+- (BOOL)addTestIdentifiersForStringRepresentation:(NSString *)stringRepresentation
+                        includingSwiftCounterpart:(BOOL)includingSwiftCounterpart
+{
+    // Two attempts, because the two spellings disagree about a string that
+    // either could name, and each attempt has to be made on its own terms: the
+    // Objective-C spelling rejects a `:)` suffix and the Swift Testing one
+    // reads it as the mark of a parameterized test.
+    XCTTestIdentifier *identifier = [[XCTTestIdentifier alloc] initWithStringRepresentation:stringRepresentation
+                                                                    preserveModulePrefix:YES];
+    if (identifier != nil) {
+        [self addTestIdentifier:identifier];
+        if (includingSwiftCounterpart) {
+            [self addTestIdentifier:identifier.swiftMethodCounterpart];
+        }
+    }
+
+    XCTTestIdentifier *swiftIdentifier = [[XCTTestIdentifier alloc] initWithSwiftTestingStringRepresentation:stringRepresentation];
+    if (swiftIdentifier == nil) {
+        // Only the empty string reaches here, since anything non-empty parses.
+        return NO;
+    }
+    [self addTestIdentifier:swiftIdentifier];
+
+    // A bare suite name in a selection is ambiguous between "this suite" and
+    // "every test in it", and a suite that is also a test is the one case where
+    // reading the name as a leaf is not wrong. So the name is added a second
+    // time, as a leaf, but only when the suite is not itself a Swift method.
+    if (identifier.componentCount == 1 && !swiftIdentifier.isSwiftMethod) {
+        [self addTestIdentifier:[[XCTTestIdentifier alloc] initWithComponents:identifier.components
+                                                                   isContainer:NO]];
+    }
+    return YES;
+}
+
+- (BOOL)addTestIdentifierWithLegacyStringRepresentation:(NSString *)stringRepresentation
+                                includingSwiftCounterpart:(BOOL)includingSwiftCounterpart
+{
+    XCTTestIdentifier *identifier = [[XCTTestIdentifier alloc] initWithStringRepresentation:stringRepresentation
+                                                                    preserveModulePrefix:YES];
+    if (identifier == nil) {
+        // The legacy spelling is a subset of the current one, so the current
+        // parser is the one that has to be the judge of whether a string is one.
+        return NO;
+    }
+    [self addTestIdentifier:identifier];
+    if (includingSwiftCounterpart) {
+        [self addTestIdentifier:identifier.swiftMethodCounterpart];
+    }
+    return YES;
+}
+
+- (void)removeTestIdentifier:(XCTTestIdentifier *)identifier
+{
+    if (identifier != nil) {
+        [_testIdentifiers removeObject:identifier];
+    }
+}
+
+- (void)removeAllTestIdentifiers
+{
+    [_testIdentifiers removeAllObjects];
+}
+
+- (void)unionSet:(XCTTestIdentifierSet *)set
+{
+    // The identity check is not in the reference, and is here deliberately: the
+    // storage being added to is the storage being enumerated, and a mutable set
+    // enumerated while it is being added to raises rather than finishing. A
+    // caller that passes a builder to itself means "no change", so that is what
+    // it gets, instead of an exception.
+    if (set == nil || set == self) {
+        return;
+    }
+    NSMutableSet<XCTTestIdentifier *> *storage = self.xctMutableIdentifiers;
+    for (XCTTestIdentifier *identifier in set) {
+        [storage addObject:identifier];
+    }
+}
+
+- (void)unionBuilder:(XCTTestIdentifierSetBuilder *)builder
+{
+    [self unionSet:builder];
+}
+
+- (void)minusSet:(XCTTestIdentifierSet *)set
+{
+    // As in -unionSet:, and for the same reason: subtracting a set from itself
+    // while enumerating it would raise, and "no change" is the only reading of
+    // it that is true.
+    if (set == nil || set == self) {
+        return;
+    }
+    NSMutableSet<XCTTestIdentifier *> *storage = self.xctMutableIdentifiers;
+    for (XCTTestIdentifier *identifier in set) {
+        [storage removeObject:identifier];
+    }
+}
+
+- (void)minusBuilder:(XCTTestIdentifierSetBuilder *)builder
+{
+    [self minusSet:builder];
+}
+
+- (XCTTestIdentifierSet *)testIdentifierSet
+{
+    return [[XCTTestIdentifierSet alloc] initWithSet:self];
+}
+
+- (NSSet<XCTTestIdentifier *> *)testIdentifiers
+{
+    return self.xctMutableIdentifiers;
+}
+
+#pragma mark - NSCopying
+
+- (id)copyWithZone:(NSZone *)zone
+{
+    XCTTestIdentifierSetBuilder *copy = [[[self class] allocWithZone:zone] init];
+    [copy unionSet:self];
+    return copy;
 }
 
 @end

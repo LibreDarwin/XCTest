@@ -134,6 +134,25 @@ static NSInteger XCTSeedableRandomNumberGenerator(void)
     return self;
 }
 
+#pragma mark - Detaching from an IDE
+
+/// Three assignments, in the order the reference makes them.
+///
+/// The order is not observable -- nothing here reads what it just wrote -- but
+/// the set is. What comes off is exactly the reporting relationship: the
+/// session that named the run, and the flag saying to report it to somebody.
+/// What goes on is the flag saying to log instead, because a run that is no
+/// longer being watched still has to be able to say what it did. Everything a
+/// run needs in order to execute is untouched, which is the point: this is how
+/// a configuration that was serialized by an IDE becomes usable again by
+/// whoever deserialized it.
+- (void)clearXcodeReportingConfiguration
+{
+    self.reportResultsToIDE = NO;
+    self.sessionIdentifier = nil;
+    self.emitOSLogs = YES;
+}
+
 #pragma mark - Derived properties
 
 - (XCTTestIdentifierSet *)testIdentifiersToRun

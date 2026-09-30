@@ -18,9 +18,15 @@
 // what an archive contained. None of that is anybody else's business, so it
 // stays here.
 //
-// Every declaration below is a category. That is deliberate, and it is what
-// makes this file safe under both SDKs: re-declaring a method a category already
-// declares is legal, where re-declaring a class is a hard error.
+// Every *method* declaration below is a category. That is deliberate, and it is
+// what makes this file safe under both SDKs: re-declaring a method a category
+// already declares is legal, where re-declaring a class is a hard error.
+//
+// A constant is the one thing that cannot follow the rule, because a
+// category has nowhere to put one, and this file now needs
+// NSURLContentModificationDateKey. It is declared as an extern rather than
+// spelled out as a literal: the runtime exports that symbol, so this resolves to
+// the real constant instead of a second copy of its value that could drift.
 //
 // The one place that choice stopped being enough was assertions. The reduced
 // <Foundation/NSException.h> omits NSAssertionHandler, and upstream declares that
@@ -32,8 +38,9 @@
 // userInfo:, and NSInternalInconsistencyException are all in that same reduced
 // header, and all three are what the assertion handler would have used.
 //
-// Scope discipline: this declares only what XCTestConfiguration.m calls. It is
-// not an attempt to reconstruct Foundation.
+// Scope discipline: this declares only what XCTestConfiguration.m and
+// XCTestConfigurationLoader.m call. It is not an attempt to reconstruct
+// Foundation.
 
 #ifndef XCTESTCORE_XCTESTCOREFOUNDATIONCOMPAT_H
 #define XCTESTCORE_XCTESTCOREFOUNDATIONCOMPAT_H
@@ -43,6 +50,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+// The one constant this file needs, and the reason it is here rather than in
+// XCTestConfigurationLoader.m: it is part of what that file's public signature
+// vocabulary is made of, and duplicating its value would be a second source of
+// truth for a string the runtime already owns. Verified to link and to equal
+// its own name.
+FOUNDATION_EXPORT NSString * const NSURLContentModificationDateKey;
+
 // Path decomposition. Upstream semantics throughout, including the
 // empty-string result for a bare "/" or a path ending in a separator: stripping
 // the last component of "/Users/x/" is the answer "" and not "/" again.
@@ -51,11 +65,34 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly, copy) NSString *stringByDeletingLastPathComponent;
 @end
 
-// The reduced <Foundation/NSURL.h> stops at -isFileURL. A configuration carries
-// its bundle as a URL, and the bundle's *name* is the URL's last path component --
+// Deciding which file in a directory is the right one means comparing
+// modification dates, and that means going through NSURL rather than a path: the
+// URL is what -contentsOfDirectoryAtURL: hands back, and it is the only one of
+// the two that reports a date without a second stat() that could disagree with
+// the first.
+//
+// The reduced <Foundation/NSURL.h> stops at -isFileURL, so everything below is
+// missing from it. lastPathComponent is here because a configuration carries its
+// bundle as a URL, and the bundle's *name* is the URL's last path component --
 // the difference between a run that can find its bundle and one that cannot.
+//
+// getResourceValue:forKey:error: takes and returns id, not a typed out-parameter,
+// because that is the shape upstream uses: one method serves every resource key,
+// and the caller is the only thing that knows what it asked for. The key is
+// spelled NSString * rather than NSURLResourceKey because the reduced SDK has no
+// such typedef; the underlying type is identical, so the call is the same call.
 @interface NSURL (XCTCoreSDKCompat)
 @property (readonly, copy) NSString *lastPathComponent;
+/// The URL's last path component with its extension removed, or "" when there
+/// is nothing left after the last dot. A bundle URL's extension decides whether
+/// the file is a loadable bundle at all, so an empty answer is meaningful and not
+/// an error.
+@property (readonly, copy) NSString *pathExtension;
+/// A new URL, not a mutation of the receiver.
+- (NSURL *)URLByAppendingPathComponent:(NSString *)pathComponent;
+- (BOOL)getResourceValue:(out id _Nullable * _Nonnull)value
+                  forKey:(NSString *)key
+                   error:(out NSError **)error;
 @end
 
 // Flattens the array's elements into one string. This is only here to render
@@ -91,6 +128,60 @@ NS_ASSUME_NONNULL_BEGIN
 @interface NSKeyedUnarchiver (XCTCoreSDKCompat)
 /// Whether the archive has an entry for -key, whatever that entry holds.
 - (BOOL)containsValueForKey:(NSString *)key;
+@end
+
+// The three bundle questions a run asks before it has a configuration to run:
+// which bundle is this, where do its resources live, and where would a plugin
+// have been installed.
+//
+// +bundleWithURL: is the URL-based constructor, and it is what makes a bundle
+// found by directory scan usable at all -- bundleWithPath: would round-trip the
+// path through a string and lose the distinction between a URL that points at
+// something and a path that merely spells it.
+//
+// builtInPlugInsURL is nullable, and correctly so: a bundle with no PlugIns
+// directory has no answer, and that is a normal thing for a test bundle to be.
+@interface NSBundle (XCTCoreSDKCompat)
++ (nullable instancetype)bundleWithURL:(NSURL *)url;
+@property (readonly, copy) NSURL *resourceURL;
+@property (readonly, copy, nullable) NSURL *builtInPlugInsURL;
+@end
+
+// Directory enumeration, in the URL form. The reduced header has only the
+// NSString form, which would mean converting every entry back to a path to
+// compare dates and then forward again to build the bundle URL -- and the two
+// conversions are not required to agree about what a path is.
+//
+// The options argument is NSUInteger rather than NSDirectoryEnumerationOptions
+// because the reduced SDK omits that enum. Every enumeration this makes passes
+// 0, so no flag value is ever spelled, and NSUInteger is what the enum is
+// anyway.
+@interface NSFileManager (XCTCoreSDKCompat)
+- (nullable NSArray<NSURL *> *)contentsOfDirectoryAtURL:(NSURL *)url
+                             includingPropertiesForKeys:(nullable NSArray<NSString *> *)propertyKeys
+                                                options:(NSUInteger)options
+                                                  error:(out NSError **)error;
+@end
+
+// Reading a configuration's bytes. Three ways in, one reason: a configuration
+// arrives either as a file the run was pointed at or as a string an environment
+// variable carried, and the string case is base64 rather than a path because it
+// has to survive a process boundary that has no opinion about files.
+//
+// As above, the options are NSUInteger because the reduced SDK omits
+// NSDataReadingOptions and NSDataBase64DecodingOptions. All three are called
+// with 0 here, which for the base64 case is the strict reading: it rejects
+// anything outside the alphabet instead of skipping over it, and a
+// configuration that needed forgiving was not produced by the reference.
+@interface NSData (XCTCoreSDKCompat)
++ (nullable NSData *)dataWithContentsOfFile:(NSString *)path
+                                   options:(NSUInteger)options
+                                     error:(out NSError **)error;
++ (nullable NSData *)dataWithContentsOfURL:(NSURL *)url
+                                  options:(NSUInteger)options
+                                    error:(out NSError **)error;
+- (nullable instancetype)initWithBase64EncodedString:(NSString *)base64EncodedString
+                                             options:(NSUInteger)options;
 @end
 
 NS_ASSUME_NONNULL_END

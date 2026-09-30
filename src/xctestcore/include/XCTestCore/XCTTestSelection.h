@@ -22,20 +22,17 @@
 //
 // Not yet derived, and therefore absent rather than stubbed:
 //
-//   XCTTestIdentifierSetBuilder              a mutable accumulator for building
-//                                            a set incrementally. Convenience,
-//                                            not part of any archive.
 //   -XCTTagSelection dictionaryRepresentation, +modeFromString:,
 //   -XCTTagSelection initWithDictionary:     the plist form, which the IDE
 //                                            writes and this port never reads.
 //   XCTTestIdentifierSetBuilder -builder     likewise.
-//   -XCTTestIdentifier swiftMethodCounterpart, objcMethodCounterpart,
+//   -XCTTestIdentifier objcMethodCounterpart,
 //   legacyEncodingCounterpart, legacyClassAndMethodStringRepresentation,
 //   identifierWithAncestorSuiteContext, stagedIdentifier, and the nine
 //     private _XCTTestIdentifier_* subclasses
-//                                            Swift Testing interoperability and
 //                                            the encoding rewrite that carries
-//                                            it. None of it is reachable from an
+//                                            Swift Testing interoperability.
+//                                            None of it is reachable from an
 //                                            archive; the archive carries the
 //                                            option bits (below), not the
 //                                            counterparts.
@@ -152,6 +149,14 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 - (instancetype)initWithClassName:(NSString *)className
                        methodName:(NSString *)methodName;
 
+/// The designated initializer: the shape an archive stores, spelled directly.
+/// Options are the XCTTestIdentifierOption* bits, not a BOOL, because a
+/// container and a class are not the same axis as a method being Objective-C or
+/// Swift, and an identifier can be a Swift method of a class in one identifier.
+- (instancetype)initWithComponents:(NSArray<NSString *> *)components
+                       argumentIDs:(nullable NSSet<NSData *> *)argumentIDs
+                           options:(XCTTestIdentifierOptions)options NS_DESIGNATED_INITIALIZER;
+
 // No bare -init: an identifier with no components is not a shorter spelling of
 // any identifier, it is an invalid one, and there is no default that would be
 // right rather than merely plausible.
@@ -197,6 +202,35 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 
 @end
 
+/// Building an identifier by the string a human or an IDE writes for it, which
+/// is the spelling a -only-testing: argument carries and is not the spelling an
+/// archive stores. Separate from the interface above because these are lossy in
+/// a way the archive form is not: two different strings can name one identifier,
+/// and one string can name two, so a caller that needs the identifier rather
+/// than the spelling has to be prepared for both nil and a family of hits.
+@interface XCTTestIdentifier (XCTTestIdentifierCreation)
+
+/// The Objective-C spelling: `Class/method`, or a single component for a suite.
+/// The module prefix a Swift test carries is dropped, because an Objective-C
+/// runner addresses the class by its bare name.
+- (nullable instancetype)initWithStringRepresentation:(NSString *)stringRepresentation;
+
+/// As above, but -preserveModulePrefix keeps the `Module.Class` spelling, which
+/// is what a selection made against Swift tests has to match.
+- (nullable instancetype)initWithStringRepresentation:(NSString *)stringRepresentation
+                                preserveModulePrefix:(BOOL)preserveModulePrefix;
+
+/// The Swift Testing spelling, in which a `()` marks a method and `:)` marks a
+/// method with a parameterized input, and a single component is a suite.
+- (nullable instancetype)initWithSwiftTestingStringRepresentation:(NSString *)stringRepresentation;
+
+/// The same test as the Objective-C runner would name it, or nil when there is
+/// no such distinct spelling: a suite has no counterpart, and a method that is
+/// already an Objective-C one is its own counterpart.
+- (nullable XCTTestIdentifier *)swiftMethodCounterpart;
+
+@end
+
 #pragma mark - XCTTestIdentifierSet
 
 /// An unordered set of identifiers.
@@ -235,6 +269,65 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 /// The identifiers grouped by the identifier of their first component, which
 /// is how a run turns a flat identifier list back into a tree.
 - (NSDictionary<XCTTestIdentifier *, NSSet<XCTTestIdentifier *> *> *)testIdentifiersGroupedByFirstComponentIdentifier;
+
+@end
+
+#pragma mark - XCTTestIdentifierSetBuilder
+
+/// A set that is meant to be filled in, one selection string at a time, before
+/// anything reads it back.
+///
+/// A subclass rather than a wrapper so that the reading half is written once: a
+/// builder *is* a set, and every question worth asking a finished set can be
+/// asked of a half-built one. The cost is that the mutation methods are
+/// inherited by everything that could hold a builder, so the accumulation is not
+/// enforced by the type, only by where the pointer is allowed to go.
+@interface XCTTestIdentifierSetBuilder : XCTTestIdentifierSet
+
+/// Starts with the contents of a finished set, for layering one selection over
+/// another.
+- (instancetype)initWithSet:(XCTTestIdentifierSet *)set;
+- (instancetype)initWithTestIdentifier:(XCTTestIdentifier *)identifier;
+- (instancetype)initWithTestIdentifierSet:(XCTTestIdentifierSet *)set;
+
+- (void)addTestIdentifier:(XCTTestIdentifier *)identifier;
+
+/// Adds everything named by one selection string, and reports whether it named
+/// anything. This is the method a `-only-testing:` loop calls, so a NO here is
+/// the caller's only evidence that an argument was misspelled, and it is
+/// returned rather than logged for that reason.
+///
+/// A string can name two identifiers -- a Swift Testing test and the
+/// Objective-C test it corresponds to -- and both are added, because which one
+/// runs depends on which runner is driving and the set is shared between them.
+/// -includingSwiftCounterpart:NO restricts that to the primary spelling, which
+/// is what a selection read from an environment wants, since such a selection
+/// has already been narrowed to one runner by whoever wrote it.
+- (BOOL)addTestIdentifiersForStringRepresentation:(NSString *)stringRepresentation
+                        includingSwiftCounterpart:(BOOL)includingSwiftCounterpart;
+
+/// As above, for the pre-Swift-Testing spelling, which differs in how a
+/// parameterized test is written.
+- (BOOL)addTestIdentifierWithLegacyStringRepresentation:(NSString *)stringRepresentation
+                                includingSwiftCounterpart:(BOOL)includingSwiftCounterpart;
+
+- (void)removeTestIdentifier:(XCTTestIdentifier *)identifier;
+- (void)removeAllTestIdentifiers;
+
+/// Union and difference in place, which is the difference from the set's
+/// -setByAdding... family: those answer a new set, and a selection is built by
+/// accumulating.
+- (void)unionSet:(XCTTestIdentifierSet *)set;
+- (void)unionBuilder:(XCTTestIdentifierSetBuilder *)builder;
+- (void)minusSet:(XCTTestIdentifierSet *)set;
+- (void)minusBuilder:(XCTTestIdentifierSetBuilder *)builder;
+
+/// The finished set, as a snapshot that will not change as the builder does.
+@property (nonatomic, readonly) XCTTestIdentifierSet *testIdentifierSet;
+
+/// The identifiers themselves, for a caller that wants to sort or filter them
+/// before committing to a set.
+@property (nonatomic, readonly) NSSet<XCTTestIdentifier *> *testIdentifiers;
 
 @end
 

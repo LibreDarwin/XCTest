@@ -120,7 +120,12 @@ FOUNDATION_EXPORT NSInteger const XCTestConfigurationFormatVersion;
 
 /// Identifies this run. Every configuration is born with one, so two
 /// configurations that differ only in when they were made are still distinct.
-@property (nonatomic, copy) NSUUID *sessionIdentifier;
+///
+/// Nullable, and not merely for symmetry: a configuration that was not built by
+/// an IDE has no session to belong to, and -clearXcodeReportingConfiguration
+/// takes it away again on purpose. A nil here means "nobody is driving this
+/// from outside", which is a real state and not a malformed one.
+@property (nullable, nonatomic, copy) NSUUID *sessionIdentifier;
 
 /// Where results go, and whether anything is driving the run from outside.
 @property (nonatomic) BOOL reportResultsToIDE;
@@ -237,6 +242,16 @@ FOUNDATION_EXPORT NSInteger const XCTestConfigurationFormatVersion;
 /// resolves its own bundle.
 + (nullable NSString *)bundlePathForTestSuite:(NSString *)path;
 
+/// Detaches the receiver from whatever IDE was driving the run that produced
+/// it, and turns OS logging on.
+///
+/// This is what a configuration recovered from disk is given before it is used
+/// on its own: the session it belonged to is over, results were being reported
+/// to a client that is no longer there, and the only remaining audience for
+/// what happens next is the log. It is a reset, not a query, and it is not
+/// destructive -- everything the run needs to still work survives it.
+- (void)clearXcodeReportingConfiguration;
+
 // Not yet derived from the reference, and deliberately absent rather than
 // declared and left undefined:
 //
@@ -245,7 +260,6 @@ FOUNDATION_EXPORT NSInteger const XCTestConfigurationFormatVersion;
 //   XCTScreenCapturePolicy *effectiveScreenCapturePolicy
 //   XCTAggregateSuiteRunStatistics *aggregateStatisticsBeforeCrash
 //   XCTCapabilities *IDECapabilities
-//   -clearXcodeReportingConfiguration
 //
 // A configuration built today starts with no selection, so it is not yet
 // something a driver can run: the -run and -enumerate work that consumes it
