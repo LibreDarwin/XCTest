@@ -19,6 +19,14 @@
 
 #import <Foundation/Foundation.h>
 
+// The selection, because -testSelection below is typed as one. Imported rather
+// than forward-declared: a forward declaration would leave -testIdentifiersToRun
+// uncallable from outside the framework, since a client holding an
+// XCTTestSelection could not ask it what it holds either. This is the layering
+// the umbrella header describes -- a run is a configuration plus a selection --
+// and it is why importing this header alone is enough to read a run's selection.
+#import <XCTestCore/XCTTestSelection.h>
+
 // NSUUID is declared inside the audited region below rather than here, because a
 // declaration outside it has to spell out nullability at every pointer to satisfy
 // -Wnullability-completeness, and this header is compiled with that warning as an
@@ -200,6 +208,22 @@ FOUNDATION_EXPORT NSInteger const XCTestConfigurationFormatVersion;
 /// Unit tests or UI tests, decided by -initializeForUITesting.
 @property (nonatomic, readonly) XCTTestMode testMode;
 
+/// Which tests this run runs: the identifiers and tags to include, and the ones
+/// to leave out. A synthesized configuration has one -- empty, meaning everything
+/// -- so that "no selection was asked for" and "everything was asked for" are the
+/// same run, and so a driver never has to test the property for nil first.
+///
+/// Non-null, and not merely because it is convenient: the loader hands this
+/// across a process boundary, and an archive that omits the key has to decode
+/// into a usable configuration rather than into one that crashes on first use.
+@property (nonatomic, copy) XCTTestSelection *testSelection;
+
+/// Forwarders onto -testSelection, because a caller deciding what runs almost
+/// always wants the identifier lists on their own, and asking the selection
+/// first costs two hops for an answer that is usually nil.
+@property (nonatomic, readonly, copy) XCTTestIdentifierSet *testIdentifiersToRun;
+@property (nonatomic, readonly, copy) XCTTestIdentifierSet *testIdentifiersToSkip;
+
 /// Whether a configuration is complete enough to run from on its own.
 @property (class, nonatomic, readonly) BOOL supportsSecureCoding;
 
@@ -216,11 +240,6 @@ FOUNDATION_EXPORT NSInteger const XCTestConfigurationFormatVersion;
 // Not yet derived from the reference, and deliberately absent rather than
 // declared and left undefined:
 //
-//   XCTTestSelection *testSelection          and -testSelection,
-//                                               -testsToRun, -testsToSkip
-//     The selection is the run's list of tests, and those four are forwarders
-//     onto it. The selection itself is four more classes (the identifier set,
-//     the identifier, the tag selection, and a builder) and lands with them.
 //   XCTRepetitionPolicy *repetitionPolicy     how many times to repeat a test.
 //   XCTRuntimeDiagnosticsPolicy *runtimeDiagnosticsPolicy
 //   XCTScreenCapturePolicy *effectiveScreenCapturePolicy

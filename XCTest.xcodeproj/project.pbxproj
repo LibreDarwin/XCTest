@@ -8,7 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000075 /* XCTestConfiguration.m */; };
+		1A2B3C4E0000000000000082 /* XCTTestSelection.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000076 /* XCTTestSelection.m */; };
 		1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000E1 /* XCTTestSelection.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C1 /* XCTTestSelection.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000E2 /* XCTestCore.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C2 /* XCTestCore.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000F2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000093 /* Foundation.framework */; };
 		1A2B3C4D0000000000000081 /* XCTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000075 /* XCTest.m */; };
 		1A2B3C4D0000000000000082 /* XCTestSuite.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000076 /* XCTestSuite.m */; };
@@ -87,7 +90,10 @@
 		1A2B3C4E0000000000000091 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.module-map; path = module.modulemap; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000092 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000075 /* XCTestConfiguration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestConfiguration.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000076 /* XCTTestSelection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTTestSelection.m; sourceTree = "<group>"; };
 		1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestConfiguration.h; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C1 /* XCTTestSelection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTTestSelection.h; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C2 /* XCTestCore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCore.h; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000090 /* XCTest.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = XCTest.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D0000000000000091 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.module-map; path = module.modulemap; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000092 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -194,6 +200,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */,
+				1A2B3C4E00000000000000E1 /* XCTTestSelection.h in Headers */,
+				1A2B3C4E00000000000000E2 /* XCTestCore.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,6 +289,7 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4E0000000000000075 /* XCTestConfiguration.m */,
+				1A2B3C4E0000000000000076 /* XCTTestSelection.m */,
 				1A2B3C4E0000000000000095 /* include */,
 				1A2B3C4E0000000000000091 /* module.modulemap */,
 				1A2B3C4E0000000000000092 /* Info.plist */,
@@ -300,6 +309,8 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */,
+				1A2B3C4E00000000000000C1 /* XCTTestSelection.h */,
+				1A2B3C4E00000000000000C2 /* XCTestCore.h */,
 			);
 			path = XCTestCore;
 			sourceTree = "<group>";
@@ -654,6 +665,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */,
+				1A2B3C4E0000000000000082 /* XCTTestSelection.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

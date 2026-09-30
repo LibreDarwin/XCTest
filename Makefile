@@ -163,14 +163,21 @@ XCTESTCORE_FW      := $(XCTESTCORE_FW_VER)/XCTestCore
 XCTESTCORE_FW_STAMP := $(XCTESTCORE_FW_DIR)/.stamp
 XCTESTCORE_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTestCore.framework/Versions/A/XCTestCore" -framework Foundation
 
-# One installed header, which is also the module map's umbrella. The private
-# header stays in src/xctestcore: it declares Foundation members for this
-# implementation's own use, and a client that needs one is a client we cannot
-# support the same way twice.
-XCTESTCORE_FW_HEADERS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h
+# The installed headers, and the module map's umbrella. The umbrella is listed
+# after the two headers it imports, which is the order a reader wants but not
+# the order anything depends on -- make does not care, and the header guard does
+# the rest. The private header stays in src/xctestcore: it declares Foundation
+# members for this implementation's own use, and a client that needs one is a
+# client we cannot support the same way twice.
+XCTESTCORE_VALUE_HDRS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h \
+	src/xctestcore/include/XCTestCore/XCTTestSelection.h
+XCTESTCORE_FW_HEADERS := $(XCTESTCORE_VALUE_HDRS) src/xctestcore/include/XCTestCore/XCTestCore.h
 XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h
 
-XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o
+# One object per source, spelled out. A pattern rule would be shorter and would
+# not build under bmake, and the whole reason this project builds under both is
+# that nothing here depends on a GNU extension.
+XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o $(XCTESTCORE_OBJDIR)/XCTTestSelection.o
 
 XCCOV        := $(BUILD_DIR)/xccov
 XCCOV_OBJS   := $(OBJDIR)/xcresult.o $(OBJDIR)/bkeyed.o $(OBJDIR)/xccov.o
@@ -328,6 +335,14 @@ $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o: src/xctestcore/XCTestConfiguration.m
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfiguration.m
 
+# Depends on the value headers rather than on $(XCTESTCORE_FW_HEADERS): the
+# umbrella imports both, so a rule that named it as a prerequisite would claim
+# this object changes when only the umbrella's comment does. Cheap to be wrong
+# about in the other direction, not in this one.
+$(XCTESTCORE_OBJDIR)/XCTTestSelection.o: src/xctestcore/XCTTestSelection.m $(XCTESTCORE_VALUE_HDRS) $(XCTESTCORE_PRIV_HDRS)
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTTestSelection.m
+
 $(XCCOV): $(XCCOV_OBJS) $(LIBZSTD)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $(XCCOV_OBJS) $(LIBZSTD) $(FW)
@@ -471,6 +486,16 @@ check-metrics: $(XCTEST_FW_STAMP)
 check-configuration: $(XCTESTCORE_FW_STAMP)
 	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh
 
+# A selection is a value that crosses a process boundary the same way a
+# configuration does, and its interesting behaviour is almost entirely in the
+# decoder: an absent mode key and an explicit zero key are one bit apart in the
+# archive and select opposite sets of tests. A harness is the only way to see
+# any of it work. It probes the archives rather than the objects, so the key
+# names -- the interface with the IDE, an .xctestrun, and the shipped
+# framework -- are checked rather than assumed.
+check-selection: $(XCTESTCORE_FW_STAMP)
+	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-selection.sh
+
 # The implementation has to compile on its own terms, and every function the headers
 # export has to exist, or a caller only reaches it by luck. check-headers and
 # check-macros prove the declarations are well-formed; this proves the definitions
@@ -481,7 +506,7 @@ check-configuration: $(XCTESTCORE_FW_STAMP)
 check-sources:
 	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-sources
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd is already usable, and regenerating it is only
@@ -540,7 +565,8 @@ check-xcode:
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-expectations.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-source-context.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-metrics.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-selection.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -559,4 +585,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-sources test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-sources test clangd-config check-xcode install clean

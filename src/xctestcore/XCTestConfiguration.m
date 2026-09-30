@@ -118,6 +118,13 @@ static NSInteger XCTSeedableRandomNumberGenerator(void)
     // "this run asked for no activities", not "this run never had an opinion".
     _reportActivities = YES;
     _inProcessParallelizationEnabled = YES;
+    // An empty selection, not a nil one. A synthesized configuration is
+    // complete, and completeness here means "runs everything" -- so the
+    // selection has to exist and have to be empty rather than being absent. A
+    // driver then never has to ask whether there is a selection before asking
+    // what it contains, and an archive that omits the key decodes to the same
+    // thing a client that never set one gets.
+    _testSelection = [[XCTTestSelection alloc] init];
     // Held as a block because that is what the property is: a client replaces
     // the generator to get a reproducible order without faking a seed, and a C
     // function pointer is not substitutable for one.
@@ -128,6 +135,16 @@ static NSInteger XCTSeedableRandomNumberGenerator(void)
 }
 
 #pragma mark - Derived properties
+
+- (XCTTestIdentifierSet *)testIdentifiersToRun
+{
+    return self.testSelection.identifiersToRun;
+}
+
+- (XCTTestIdentifierSet *)testIdentifiersToSkip
+{
+    return self.testSelection.identifiersToSkip;
+}
 
 - (NSString *)testBundleName
 {
@@ -218,6 +235,23 @@ static XCTestConfiguration *XCTActiveTestConfiguration = nil;
     // stays nil. The three NSSet properties below all decode through this.
     NSSet *setCollectionClasses = [NSSet setWithObjects:[NSString class], [NSSet class],
                                                        [NSArray class], [NSDictionary class], nil];
+
+    // The selection, and the classes inside it. Not optional: the key is always
+    // written, and an archive from a tool that predates it has to decode into a
+    // run that executes everything rather than into one with no selection at all.
+    // The whole set is named rather than just XCTTestSelection, because the
+    // decoder is only permitted the classes it may actually find in the value --
+    // a selection holds identifier sets, identifiers, and tag selections, each of
+    // which holds NSSet and NSData, and naming only the outer class would leave
+    // every one of them rejected.
+    NSSet *selectionClasses = [NSSet setWithObjects:[XCTTestSelection class], [XCTTestIdentifierSet class],
+                                                      [XCTTestIdentifier class], [XCTTagSelection class],
+                                                      [XCTTag class], [NSSet class], [NSArray class],
+                                                      [NSData class], [NSString class], nil];
+    XCTTestSelection *testSelection = [coder decodeObjectOfClasses:selectionClasses forKey:@"testSelection"];
+    if (testSelection) {
+        self.testSelection = testSelection;
+    }
 
     NSURL *testBundleURL = [coder decodeObjectOfClasses:[NSSet setWithObjects:[NSURL class], nil]
                                                 forKey:@"testBundleURL"];
@@ -438,6 +472,12 @@ static XCTestConfiguration *XCTActiveTestConfiguration = nil;
     [coder encodeInteger:self.preferredScreenCaptureFormat forKey:@"preferredScreenCaptureFormat"];
     [coder encodeInteger:self.testExecutionOrdering forKey:@"testExecutionOrdering"];
     [coder encodeInteger:self.leaksCheckingMode forKey:@"leaksCheckingMode"];
+    // Written unconditionally, including when the selection is empty. An absent
+    // key and a present-but-empty value are different instructions, and an
+    // encoder that skipped the empty case would make "this run asked for no
+    // tests in particular" and "this run was configured before selections
+    // existed" encode to the same bytes.
+    [coder encodeObject:self.testSelection forKey:@"testSelection"];
     [coder encodeObject:self.randomExecutionOrderingSeed forKey:@"randomExecutionOrderingSeed"];
     [coder encodeBool:self.testTimeoutsEnabled forKey:@"testTimeoutsEnabled"];
     [coder encodeObject:self.maximumTestExecutionTimeAllowance forKey:@"maximumTestExecutionTimeAllowance"];
@@ -464,6 +504,7 @@ static XCTestConfiguration *XCTActiveTestConfiguration = nil;
     // narrows a copy's selection or changes its ordering must not change the
     // configuration the driver is holding.
     XCTestConfiguration *copy = [[XCTestConfiguration allocWithZone:zone] init];
+    copy->_testSelection = [_testSelection copy];
     copy->_testBundleURL = [_testBundleURL copy];
     copy->_testBundleRelativePath = [_testBundleRelativePath copy];
     copy->_basePathForTestBundleResolution = [_basePathForTestBundleResolution copy];
@@ -537,14 +578,14 @@ static BOOL XCTEqualObjects(id lhs, id rhs)
     // Two equal configurations always produce the same value, which is the only
     // property the hash contract actually requires.
     //
-    // The reference XORs the bundle URL, the *test selection* and the session
-    // identifier. The selection is not implemented yet, so -testExecutionOrdering
-    // stands in for it here: the substitution is documented rather than hidden
-    // because it is observable, in that two configurations differing only in test
-    // order hash differently here and identically in the reference. Both satisfy
-    // the hash contract, and -isEqual: does compare ordering on both sides, so
-    // swapping the term back is a one-line change when the selection lands.
-    return self.testBundleURL.hash ^ self.sessionIdentifier.hash ^ (NSUInteger)self.testExecutionOrdering;
+    // The middle term is the test selection, which is the one of the three that
+    // says which tests run -- so a cache keyed on this does not hand back the
+    // results of a different selection. -testExecutionOrdering is *not* a
+    // substitute for it and no longer appears here: a run that reorders the same
+    // tests is a different configuration as far as -isEqual: is concerned, but it
+    // is not a different set of results, and folding ordering into the hash would
+    // make two identical runs land in different buckets for no gain.
+    return self.testBundleURL.hash ^ self.sessionIdentifier.hash ^ self.testSelection.hash;
 }
 
 - (BOOL)isEqual:(id)object
@@ -569,6 +610,7 @@ static BOOL XCTEqualObjects(id lhs, id rhs)
 #define XCT_CONFIG_MATCHES_OBJECT(flag, field) \
     do { if (!XCTEqualObjects((flag), other->field)) { return NO; } } while (0)
 
+    XCT_CONFIG_MATCHES_OBJECT(_testSelection, _testSelection);
     XCT_CONFIG_MATCHES_OBJECT(_testBundleURL, _testBundleURL);
     XCT_CONFIG_MATCHES_OBJECT(_testBundleRelativePath, _testBundleRelativePath);
     XCT_CONFIG_MATCHES_OBJECT(_sessionIdentifier, _sessionIdentifier);
@@ -679,6 +721,13 @@ static BOOL XCTEqualObjects(id lhs, id rhs)
     [out appendFormat:@"\n\trunAsMultiDeviceRemoteRunner: %@", self.runAsMultiDeviceRemoteRunner ? @"YES" : @"NO"];
     [out appendFormat:@"\n\tmultiDeviceRemoteRunnerPlatformMap: %@", self.multiDeviceRemoteRunnerPlatformMap];
     [out appendFormat:@"\n\ttestInstructionsSet: %@", self.testInstructionsSet];
+    // The selection, with a count rather than the whole list. A configuration is
+    // often dumped with thousands of identifiers behind it, and the thing a
+    // reader needs from a log line is whether the run was told to run anything
+    // at all -- which the size answers and the list hides.
+    [out appendFormat:@"\n\ttestSelection: %lu to run, %lu to skip",
+                      (unsigned long)self.testIdentifiersToRun.count,
+                      (unsigned long)self.testIdentifiersToSkip.count];
     [out appendString:@">"];
     return out;
 }

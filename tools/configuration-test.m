@@ -490,6 +490,124 @@ static void testValueSemantics(void)
     ok("nil is not equal to a configuration", ![base isEqual:nil], nil);
 }
 
+#pragma mark - Test selection
+
+/// The selection a configuration carries.
+///
+/// Nothing here is about the selection on its own -- tools/selection-test.m is
+/// that harness. This is about the two things a configuration adds: that it is
+/// never without one, and that the one it holds survives the crossing as the
+/// same selection rather than as an equal one.
+static void testSelection(void)
+{
+    printf("selection\n");
+
+    XCTestConfiguration *config = [[XCTestConfiguration alloc] init];
+    // Non-null, and empty: a synthesized configuration is complete, and
+    // "complete" now includes "runs everything". A driver reading this never has
+    // to ask whether there is a selection before asking what is in it.
+    ok("a fresh configuration has a selection", config.testSelection != nil, nil);
+    ok("a fresh configuration runs everything", config.testSelection.identifiersToRun == nil, nil);
+    ok("a fresh configuration skips no named tests", config.testIdentifiersToRun == nil, nil);
+    ok("a fresh configuration skips nothing", config.testIdentifiersToSkip == nil, nil);
+    ok("a fresh configuration has no tags to run", config.testSelection.tagsToRun == nil, nil);
+    ok("a fresh configuration has no tags to skip", config.testSelection.tagsToSkip == nil, nil);
+
+    // The two forwarders read the selection rather than carrying their own
+    // storage. A forwarder that cached its value would go stale the moment the
+    // selection was replaced, and the caller would have no way to tell.
+    XCTTestSelection *narrowed = [[XCTTestSelection alloc]
+        initWithIdentifiersToRun:[[XCTTestIdentifierSet alloc]
+                                     initWithArray:@[[[XCTTestIdentifier alloc]
+                                                           initWithComponents:@[ @"MyTests.xctest", @"MyTests",
+                                                                                @"testOne" ]
+                                                                   argumentIDs:nil
+                                                                       options:XCTTestIdentifierOptionNone]]]
+               identifiersToSkip:nil
+                    tagsToRun:nil
+                   tagsToSkip:nil];
+    config.testSelection = narrowed;
+    ok("the forwarder follows the selection", config.testIdentifiersToRun.count == 1, nil);
+    // The configuration's own selection, not the object that was assigned: the
+    // property is -copy, so what the setter kept is an equal copy. A forwarder
+    // that read the value the assignment happened to pass would be correct right
+    // up until the configuration's selection was replaced.
+    ok("the forwarder is the configuration's own selection's set",
+       config.testIdentifiersToRun == config.testSelection.identifiersToRun, nil);
+    ok("the assignment was copied rather than aliased", config.testSelection != narrowed, nil);
+
+    // A selection is part of the configuration's identity. Two configurations
+    // that run different tests are different configurations, and a caller
+    // comparing them to decide whether a cached result is reusable has to be
+    // told no.
+    XCTestConfiguration *other = [[XCTestConfiguration alloc] init];
+    other.sessionIdentifier = config.sessionIdentifier;
+    other.testSelection = narrowed;
+    ok("two configurations with the same selection are equal", [config isEqual:other], nil);
+    ok("they hash the same", config.hash == other.hash, nil);
+
+    XCTestConfiguration *empty = [other copy];
+    empty.testSelection = [[XCTTestSelection alloc] init];
+    ok("a different selection is not equal", ![other isEqual:empty], nil);
+    ok("equality survives the difference being reversed", ![empty isEqual:other], nil);
+
+    // The selection is what the hash keys on, so two configurations that run the
+    // same tests land in the same bucket however they got there -- including one
+    // that built its selection from a plist rather than through an identifier.
+    XCTestConfiguration *rebuilt = [other copy];
+    rebuilt.testSelection = [[XCTTestSelection alloc] initWithIdentifiersToRun:narrowed.identifiersToRun
+                                                              identifiersToSkip:nil
+                                                                   tagsToRun:nil
+                                                                  tagsToSkip:nil];
+    ok("the same selection built twice is equal", [other isEqual:rebuilt], nil);
+    ok("and hashes the same", other.hash == rebuilt.hash, nil);
+
+    // And the ordering is not what distinguishes them any more. A run that
+    // reorders the same tests executes the same set, so it must land in the same
+    // bucket -- the substitution that used to sit in -hash would have split it.
+    XCTestConfiguration *reordered = [other copy];
+    reordered.testExecutionOrdering = XCTTestExecutionOrderingRandom;
+    ok("a reordered run is a different configuration", ![other isEqual:reordered], nil);
+    ok("but it hashes the same", other.hash == reordered.hash, nil);
+
+    // A copy that shared its selection would be a configuration that narrowed
+    // itself under a run that had already read the original.
+    XCTestConfiguration *shared = [other copy];
+    shared.testSelection.identifiersToRun =
+        [[XCTTestIdentifierSet alloc] initWithArray:@[]];
+    ok("mutating a copy's selection leaves the original alone",
+       other.testIdentifiersToRun.count == 1, other.testIdentifiersToRun.anyTestIdentifier.identifierString);
+
+    // The crossing. The selection has to come back as the same selection, with
+    // its identifiers intact -- a configuration that decoded into an equal but
+    // differently-spelled selection would pass -isEqual: and still be wrong in
+    // the one way that matters to a log.
+    XCTestConfiguration *round = roundTrip(config, @"the selection round trips");
+    ok("the selection survives the crossing",
+       [round.testSelection isEqual:config.testSelection], nil);
+    ok("the identifiers survive the crossing",
+       [round.testIdentifiersToRun.anyTestIdentifier.identifierString
+           isEqualToString:@"MyTests.xctest/MyTests/testOne"],
+       round.testIdentifiersToRun.anyTestIdentifier.identifierString);
+    ok("the forwarders survive the crossing",
+       round.testIdentifiersToRun.count == 1 && round.testIdentifiersToSkip == nil, nil);
+
+    // An archive written before selections existed has no "testSelection" key.
+    // That has to decode into a run that executes everything rather than into
+    // one with nothing to read, because that configuration is still a run
+    // somebody asked for.
+    XCTestConfiguration *legacy = decodePartialArchive(@{}, [NSSet set], @"a sparse archive with no selection");
+    ok("an archive with no selection key still has one", legacy.testSelection != nil, nil);
+    ok("and it runs everything", legacy.testSelection.identifiersToRun == nil, nil);
+    ok("and its forwarders answer empty", legacy.testIdentifiersToRun == nil, nil);
+
+    // The description is where a wrong run is first noticed, and the count is
+    // what a reader needs from it -- the full list would bury the one surprising
+    // field in a run that selected thousands of tests.
+    ok("the description reports the selection's size",
+       [other.description containsString:@"testSelection: 1 to run, 0 to skip"], nil);
+}
+
 #pragma mark - Active configuration
 
 static void testActiveConfiguration(void)
@@ -555,6 +673,7 @@ int main(void)
         testCoding();
         testPartialArchive();
         testValueSemantics();
+        testSelection();
         testActiveConfiguration();
         testExecutionOrdering();
 

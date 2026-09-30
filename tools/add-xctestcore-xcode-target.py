@@ -77,10 +77,26 @@ TARGET = "1A2B3C4E00000000000000B3"
 # MODULEMAP_FILE already make the build system process them, and listing them twice
 # makes it emit two commands for one output.
 
-SOURCES = [("XCTestConfiguration.m", "1A2B3C4E0000000000000075", "1A2B3C4E0000000000000081")]
-HEADERS = ["XCTestConfiguration.h"]
-header_refs = ["1A2B3C4E00000000000000C0"]
-header_buildfiles = ["1A2B3C4E00000000000000E0"]
+SOURCES = [
+    ("XCTestConfiguration.m", "1A2B3C4E0000000000000075", "1A2B3C4E0000000000000081"),
+    ("XCTTestSelection.m", "1A2B3C4E0000000000000076", "1A2B3C4E0000000000000082"),
+]
+# All three are Public: this is a private framework, so "public" here means
+# reachable from inside the module rather than from outside it. The order is the
+# one the generated project lists them in -- value headers, then the umbrella
+# that imports them. Header install order carries no meaning to a compiler, so
+# it is kept in step with the project rather than chosen on aesthetics.
+HEADERS = ["XCTestConfiguration.h", "XCTTestSelection.h", "XCTestCore.h"]
+header_refs = [
+    "1A2B3C4E00000000000000C0",
+    "1A2B3C4E00000000000000C1",
+    "1A2B3C4E00000000000000C2",
+]
+header_buildfiles = [
+    "1A2B3C4E00000000000000E0",
+    "1A2B3C4E00000000000000E1",
+    "1A2B3C4E00000000000000E2",
+]
 
 # The Foundation.framework file reference already exists from the XCTest target and
 # is reused: two references for one SDK framework would be a second object with a

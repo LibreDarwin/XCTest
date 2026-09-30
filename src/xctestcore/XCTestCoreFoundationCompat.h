@@ -64,8 +64,19 @@ NS_ASSUME_NONNULL_BEGIN
 // placeholders. Upstream returns an empty string for an empty array and the
 // separator for an empty element, which is why it is a separator and not a
 // delimiter to skip.
+//
+// The reduced header set declares -firstObject on NSOrderedSet and nowhere
+// else, which is a gap rather than a decision: upstream has it on NSArray, and
+// the runtime answers it. Two things want it and neither can spell it as
+// -objectAtIndex:0, because neither knows the count is non-zero -- an
+// -anyTestIdentifier on an empty set, and an identifier's last component, which
+// is nil precisely when the component list is empty.
+//
+// Both in one category because clang treats two categories of the same name on
+// one class as a duplicate definition, not a merge.
 @interface NSArray<ObjectType> (XCTCoreSDKCompat)
 - (NSString *)componentsJoinedByString:(NSString *)separator;
+- (nullable ObjectType)firstObject;
 @end
 
 // Archive introspection. A decoded configuration has to distinguish "this key
