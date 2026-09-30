@@ -28,7 +28,7 @@ trap 'rm -rf "$tmp"' EXIT
 # mode this file exists to rule out.
 "$CC" -fobjc-arc -Wall -Wextra -Werror \
     -isysroot "$SDK" \
-    -I"$root/src/xctest" \
+    -I"$root/src/xctestcore" \
     -I"$root/src/xctest/include" \
     -framework Foundation \
     -o "$tmp/foundation-compat-test" \

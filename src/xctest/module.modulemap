@@ -16,6 +16,17 @@
 // The nested "module *" re-export keeps submodules importable for clients that
 // reach for a narrower name, matching what an umbrella-only module would give
 // them after a single import.
+//
+// The framework this module describes has no objects in it. Everything is built
+// into XCTestCore.framework and reached through the @rpath/XCTestCore
+// re-export recorded in this dylib's load commands, so a client links
+// -framework XCTest and every symbol below resolves at run time. That is Apple's
+// arrangement: its XCTest.framework is a 110KB shim whose only exported symbol
+// is _XCUIEnableUIAutomation, and whose one re-export is XCTestCore. Nothing
+// here re-declares or wraps an API, because the headers below already declare
+// everything they need -- they do not forward to XCTestCore headers, which
+// Apple's copies of these same headers do and cannot use, because Apple's
+// XCTestCore has no headers to forward to.
 
 framework module XCTest {
   umbrella header "XCTest.h"

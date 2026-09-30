@@ -83,9 +83,22 @@ if [ "$(lipo -archs "$BIN" 2>/dev/null | wc -w | tr -d ' ')" -eq 0 ]; then
 	note "architectures" "lipo reports none"
 fi
 
-# Dependency lines start after the file path and the install name.  Any
-# dependency naming XCTest by absolute path would mean Apple's binary is being
-# pulled in instead of ours.
+# Dependency lines start after the file path and the install name.  Two things
+# are checked, and they are not the same check.
+#
+# First, no *absolute* path may name XCTest.  A dependency line that begins with
+# a slash is a fixed location, and the only XCTest at a fixed location is
+# Apple's -- so an absolute XCTest path means Apple's binary would be loaded
+# instead of ours at run time.  Before this framework was a re-exporting shim,
+# every XCTest-naming line was an absolute path and the check was simply "does
+# the line contain XCTest"; that now has to be an absolute-path test, because
+# the required @rpath/XCTestCore re-export below also names XCTest.
+#
+# Second, the @rpath/XCTestCore re-export has to be present, because it is the
+# whole mechanism by which the public API reaches a client that links only
+# -framework XCTest.  Apple's XCTest.framework has this exact line; a shim that
+# dropped it would still build and still pass the client check below only if the
+# client happened to link XCTestCore too, which it does not.
 #
 # otool -L prints one such header per architecture for a fat binary, so
 # "tail -n +3" only strips the first slice's file path and install name.  A
@@ -93,8 +106,13 @@ fi
 # read as a dependency and fail on itself.  Ask otool for one architecture at a
 # time, so the line arithmetic holds for both thin and fat products.
 for arch in $(lipo -archs "$BIN" 2>/dev/null); do
-	if otool -arch "$arch" -L "$BIN" 2>/dev/null | tail -n +3 | grep 'XCTest'; then
-		note "dependencies" "dylib ($arch) depends on an XCTest path; Apple's binary could be loaded instead of ours"
+	deps=$(otool -arch "$arch" -L "$BIN" 2>/dev/null | tail -n +3)
+	if echo "$deps" | grep '^[[:space:]]*/.*XCTest'; then
+		note "dependencies" "dylib ($arch) depends on an absolute XCTest path; Apple's binary could be loaded instead of ours"
+	fi
+	if ! echo "$deps" | grep -q '@rpath/XCTestCore\.framework/Versions/A/XCTestCore.*reexport'; then
+		note "reexport" "dylib ($arch) does not re-export @rpath/XCTestCore.framework/Versions/A/XCTestCore"
+		echo "$deps" | sed 's/^/  got: /'
 	fi
 done
 

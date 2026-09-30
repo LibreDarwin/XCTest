@@ -28,7 +28,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 "$CC" -fobjc-arc -fblocks -Wall -Wextra -Werror \
     -isysroot "$SDK" \
-    -I"$root/src/xctest" \
+    -I"$root/src/xctestcore" \
     -F"$(dirname "$framework")" \
     -framework XCTest \
     -framework Foundation \

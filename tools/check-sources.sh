@@ -22,20 +22,20 @@ root=$(cd "$here/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-CFLAGS="-c -fobjc-arc -Wall -Wextra -Werror -Wno-unused-function
-        -isysroot $SDK -I$root/src/xctest/include -I$root/src/xctest"
-
-# XCTestCore is a second framework with its own include roots, and it needs
-# exceptions: the reference reaches an assertion handler rather than returning a
-# placeholder for an unrecognised ordering, and raising is how that is reproduced
-# here.
-CORE_CFLAGS="-c -fobjc-arc -fobjc-exceptions -fblocks
+CFLAGS="-c -fobjc-arc -fobjc-exceptions -fblocks
         -Wall -Wextra -Werror -Wno-unused-function
-        -isysroot $SDK -I$root/src/xctestcore/include -I$root/src/xctestcore"
+        -isysroot $SDK -I$root/src/xctestcore/include -I$root/src/xctestcore -I$root/src/xctest/include"
 
+# Every implementation now lives in src/xctestcore: the public framework is a
+# re-exporting shim with no objects of its own.  The public headers are still
+# reachable through src/xctest/include because the machinery declares itself in
+# <XCTest/...> and imports it, which is what the third include root is for.
+# Exceptions are enabled because the reference reaches an assertion handler
+# rather than returning a placeholder for an unrecognised ordering, and raising
+# is how that is reproduced here.
 status=0
 objects=""
-for source in "$root"/src/xctest/*.m; do
+for source in "$root"/src/xctestcore/*.m; do
     name=$(basename "$source" .m)
     # shellcheck disable=SC2086
     if "$CC" $CFLAGS -o "$tmp/$name.o" "$source" 2> "$tmp/$name.log"; then
@@ -44,20 +44,6 @@ for source in "$root"/src/xctest/*.m; do
     else
         printf '  %-28s FAILED\n' "$name"
         cat "$tmp/$name.log"
-        status=1
-    fi
-done
-
-core_objects=""
-for source in "$root"/src/xctestcore/*.m; do
-    name=$(basename "$source" .m)
-    # shellcheck disable=SC2086
-    if "$CC" $CORE_CFLAGS -o "$tmp/core-$name.o" "$source" 2> "$tmp/core-$name.log"; then
-        printf '  %-28s compiles\n' "core/$name"
-        core_objects="$core_objects $tmp/core-$name.o"
-    else
-        printf '  %-28s FAILED\n' "core/$name"
-        cat "$tmp/core-$name.log"
         status=1
     fi
 done
@@ -84,8 +70,14 @@ done
 # that way and therefore never reported anything; the negative controls are what
 # caught it. Single-pattern extraction with `rtk grep -o` does work, so it is still
 # used below.
-find "$root/src/xctest" -name '*.h' | xargs cat | tr '\n' ' ' \
-    | rtk grep -o "XCT_\(WEAK_\)\?EXPORT[^;]*" \
+# Both export spellings are scanned. XCT_EXPORT/XCT_WEAK_EXPORT is the machinery's
+# own macro and lives in the public headers; FOUNDATION_EXPORT is what the
+# XCTestCore value-type headers use, and the orderings helpers it declares
+# (_XCTTestExecutionOrderingFromString and friends) are ordinary text symbols that
+# would otherwise be reported as "defined but not declared" now that every
+# implementation file compiles into one object set.
+find "$root/src/xctest/include/XCTest" "$root/src/xctestcore" -name '*.h' | xargs cat | tr '\n' ' ' \
+    | rtk grep -o "\(XCT_\(WEAK_\)\?EXPORT\|FOUNDATION_EXPORT\)[^;]*" \
     | rtk grep -o "_XCT[A-Za-z0-9_]*(" | tr -d '(' | sort -u > "$tmp/want"
 
 # nm spells a C function `_XCTFoo` as `__XCTFoo`: the leading underscore in the
@@ -117,7 +109,10 @@ if [ -n "$extra" ]; then
     exit 1
 fi
 
-# The same contract for XCTestCore, with three deliberate differences.
+# The same contract for the XCTestCore value-type header, with three deliberate
+# differences.  It reads only XCTestConfiguration.h, and it accepts data symbols
+# as well as text ones, because that header exports a format-version constant
+# whose whole point is to have a linkable symbol.
 #
 # Newlines are flattened first. This header writes the return type and the function
 # name on separate lines ("FOUNDATION_EXPORT NSString *_Nonnull" then the name), and
@@ -142,9 +137,9 @@ core_declarations() {
 { core_declarations | rtk grep -o "XCT[A-Za-z0-9_]*(" | tr -d '('
   core_declarations | rtk grep -o "XCT[A-Za-z0-9_]*$"; } | sort -u > "$tmp/core-want"
 
-if [ -n "$core_objects" ]; then
+if [ -n "$objects" ]; then
     # shellcheck disable=SC2086
-    nm -gU $core_objects \
+    nm -gU $objects \
         | rtk grep -o " [TDS] _XCT[A-Za-z0-9_]*" \
         | sed 's/^ [TDS] _//' \
         | rtk grep -v "^__" \

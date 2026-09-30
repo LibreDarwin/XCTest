@@ -93,17 +93,26 @@ EOF
     echo "gen-clangd-config: wrote $out"
 }
 
-# XCTest reads its include root; XCTestCore reads both its include root and the
-# source root itself, because it declares a private header
-# (XCTestCoreFoundationCompat.h) beside the implementations rather than under
-# include/. -fblocks for XCTestCore: one property in XCTestConfiguration.h is a
-# block, so an editor without it cannot parse that header. Every -I is absolute
-# (see above).
+# XCTest reads its include root. src/xctest has no implementation files of its own
+# any more -- it is the re-exporting shim -- but it still holds the public headers,
+# and that is the include root a client needs, so the config stays.
+#
+# XCTestCore reads three roots and needs all three. Its own include root, the
+# source root beside it because it declares a private header
+# (XCTestCoreFoundationCompat.h) next to the implementations rather than under
+# include/, and the public root, because every implementation here is declared in
+# <XCTest/...> and imports itself that way. Without the third, clangd reports
+# "file not found" for the framework's own headers in all 19 files -- and unlike
+# the Include-path-absolute trap above, that one is silent in the sense that the
+# header simply is not found, with nothing pointing at a flag being wrong.
+#
+# -fblocks for XCTestCore: one property in XCTestConfiguration.h is a block, so an
+# editor without it cannot parse that header. Every -I is absolute (see above).
 write_clangd src/xctest XCTest XCTestDefines.h \
     "-I$root/src/xctest/include" -fobjc-arc -Wall "-isysroot$SDK"
 
 write_clangd src/xctestcore XCTestCore XCTestCore.h \
-    "-I$root/src/xctestcore/include" "-I$root/src/xctestcore" \
+    "-I$root/src/xctestcore/include" "-I$root/src/xctestcore" "-I$root/src/xctest/include" \
     -fobjc-arc -fblocks -Wall "-isysroot$SDK"
 
 echo "gen-clangd-config: SDK: $SDK"

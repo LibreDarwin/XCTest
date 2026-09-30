@@ -34,7 +34,7 @@ trap 'rm -rf "$tmp"' EXIT
 "$CC" -fobjc-arc -fblocks -Wall -Wextra -Werror -Wno-deprecated-declarations \
     -Wno-unused-parameter \
     -isysroot "$SDK" \
-    -I"$root/src/xctest" \
+    -I"$root/src/xctestcore" \
     -F"$(dirname "$framework")" \
     -framework XCTest \
     -framework Foundation \
@@ -44,8 +44,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 "$tmp/expectations-test"
 
-# The harness above compiles against the source tree, with -Isrc/xctest, so it
-# can reach the private XCTestExpectationInternal.h and would still build if a
+# The harness above compiles against the source tree, with -Isrc/xctestcore, so
+# it can reach the private XCTestExpectationInternal.h and would still build if a
 # public header failed to declare something its own API names. This second
 # client sees nothing but the installed bundle, which is what a real caller
 # gets, and names the Foundation symbols the KVO API forces its users to name.

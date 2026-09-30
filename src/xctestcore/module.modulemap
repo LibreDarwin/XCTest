@@ -8,18 +8,28 @@
 // directory. It is what makes "@import XCTestCore;" work for the xctest agent
 // and for anything else that links the private side of a test run.
 //
-// The umbrella is XCTestCore.h rather than one of the three headers it imports.
+// The umbrella is XCTestCore.h rather than one of the headers it imports.
 // A module map declares exactly one umbrella, and naming any of the others would
 // leave the rest reachable only by naming their files -- which works, and is not
 // something a client should have to know.
 //
-// The framework links Foundation and nothing else. Apple's XCTestCore links the
-// public XCTest.framework too, because its driver runs test cases; this slice is
-// the value type that describes a run and the loader that finds it, neither of
-// which references a single XCTest class, so the dependency is not invented
-// here. It gets added when the driver lands, in the direction that matters: a
-// test bundle links XCTest, XCTest links XCTestCore, and nothing ever links
-// back.
+// This framework holds every implementation file: the test machinery
+// (XCTestCase, XCTestSuite, XCTestRun, the expectations, the assertions, the
+// metrics) as well as the run configuration, the selection, and the loader.
+// XCTest.framework is the public half: it installs the headers and the umbrella,
+// contains no objects of its own, and re-exports this framework. Apple's
+// dependency runs the same way round -- XCTest re-exports XCTestCore, and
+// XCTestCore does not link XCTest -- and there is nothing to add here, because
+// the direction that matters is a test bundle links XCTest, XCTest links
+// XCTestCore, and nothing ever links back.
+//
+// One deliberate difference from Apple: this framework installs a Headers
+// directory and this module map, and Apple's does not. Apple's XCTestCore
+// Versions/A contains only the binary, Resources, and _CodeSignature, so
+// "@import XCTestCore;" cannot work against it at all. The private umbrella is
+// kept because it is the clean way to reach these declarations from the agent
+// that drives a run once that lands; nothing outside this repository can tell
+// the difference, because the public API is reached through XCTest in both.
 
 framework module XCTestCore {
   umbrella header "XCTestCore.h"

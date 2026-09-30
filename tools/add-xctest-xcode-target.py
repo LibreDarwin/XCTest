@@ -9,11 +9,24 @@ product reference, header/resource references, the four build phases, build
 configurations, the target itself, and the group tree that makes it visible.
 
 The four specialized expectations and the performance measurement types came
-after that, so the target this script generates has 16 sources and 31 public
-headers rather than 11 and 25. SOURCES and HEADERS above are the single place
-either list is written down: a new public header is picked up automatically, and
-a new implementation has to be added to SOURCES by hand so it also gets an entry
-in the Makefile that a reviewer can check it against.
+after that, so the target this script generates installed 31 public headers
+rather than the 25 the skeleton had.
+
+That count is now the whole of it. This framework has no sources. Every
+implementation file is built into XCTestCore.framework and reached through the
+@rpath/XCTestCore re-export this dylib records, so a client links
+-framework XCTest and resolves every public symbol at run time. That is Apple's
+arrangement rather than an approximation of it: Apple's XCTest.framework is a
+110KB shim whose only exported symbol is _XCUIEnableUIAutomation, and whose one
+re-export is XCTestCore. HEADERS below is therefore the single place either list
+is written down -- a new public header is picked up automatically, and an
+implementation file has to be added to add-xctestcore-xcode-target.py's SOURCES
+so it also gets an entry in the Makefile that a reviewer can check it against.
+
+The 11 source references and 11 Sources build files that 0a9c5b0 left behind are
+deleted rather than left orphaned. The files they name are in src/xctestcore now,
+so a reference to src/xctest/XCTest.m is a reference to nothing, and an
+unresolvable path is exactly the failure this project's checks exist to catch.
 
 Header identifiers are numbered by position in the sorted list, so adding a
 header renumbers the ones after it. The churn in the project file is mechanical:
@@ -68,30 +81,42 @@ TARGET = "1A2B3C4D00000000000000B3"
 # for one output ("multiple commands produce .../Info.plist") or, for the
 # modulemap, no rule at all.
 
-# Sources already have file refs (0x75-0x7F) and build files (0x81-0x8B) from
-# 0a9c5b0. Reuse them rather than minting a second set. The four expectations
-# added later have no such pair, so they mint theirs above the ranges already
-# in use: refs 0x100-0x104, build files 0x110-0x114. Keeping them out of
-# 0x75-0x7F/0x81-0x8B is what lets the rewrite below stay exact. XCTestMetrics.m
-# is the fifth such late addition and takes the next pair, 0x104/0x114.
-SOURCES = [
-    ("XCTest.m", "1A2B3C4D0000000000000075", "1A2B3C4D0000000000000081"),
-    ("XCTestSuite.m", "1A2B3C4D0000000000000076", "1A2B3C4D0000000000000082"),
-    ("XCTestCase.m", "1A2B3C4D0000000000000077", "1A2B3C4D0000000000000083"),
-    ("XCTestRun.m", "1A2B3C4D0000000000000078", "1A2B3C4D0000000000000084"),
-    ("XCTestObservation.m", "1A2B3C4D0000000000000079", "1A2B3C4D0000000000000085"),
-    ("XCTestAssertions.m", "1A2B3C4D000000000000007A", "1A2B3C4D0000000000000086"),
-    ("XCTestInternal.m", "1A2B3C4D000000000000007B", "1A2B3C4D0000000000000087"),
-    ("XCTestSupportTypes.m", "1A2B3C4D000000000000007C", "1A2B3C4D0000000000000088"),
-    ("XCTestExpectation.m", "1A2B3C4D000000000000007D", "1A2B3C4D0000000000000089"),
-    ("XCTWaiter.m", "1A2B3C4D000000000000007E", "1A2B3C4D000000000000008A"),
-    ("XCTExpectedFailure.m", "1A2B3C4D000000000000007F", "1A2B3C4D000000000000008B"),
-    ("XCTNSNotificationExpectation.m", "1A2B3C4D0000000000000100", "1A2B3C4D0000000000000110"),
-    ("XCTNSPredicateExpectation.m", "1A2B3C4D0000000000000101", "1A2B3C4D0000000000000111"),
-    ("XCTKVOExpectation.m", "1A2B3C4D0000000000000102", "1A2B3C4D0000000000000112"),
-    ("XCTDarwinNotificationExpectation.m", "1A2B3C4D0000000000000103", "1A2B3C4D0000000000000113"),
-    ("XCTestMetrics.m", "1A2B3C4D0000000000000104", "1A2B3C4D0000000000000114"),
-]
+# 0a9c5b0 left 11 file references (0x75-0x7F) and 11 Sources build files
+# (0x81-0x8B) for files that have since moved to src/xctestcore. They are deleted
+# below, and SOURCES is empty because this target compiles nothing. Two things
+# depend on that being true rather than merely intended: the Sources build phase
+# has to come out empty, or xcodebuild would look for the old paths, and the
+# re-export flag has to be on the link line, or the dylib would load with nothing
+# in it to re-export. Both are checked below.
+SOURCES = []
+
+# The 11 orphans name files that no longer exist at that path, so their build files
+# and their file references are both removed. Removing only the build files would
+# leave 11 references to nothing in the navigator, which xcodebuild drops silently.
+# The build files are matched with and without the fileRef name comment, because
+# 0a9c5b0 wrote them without one.
+removed_bf = 0
+for line in re.findall(
+    r"^\t\t1A2B3C4D000000000000008[1-9AB] /\* .*? in Sources \*/ = \{isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007[5-9ABCDEF](?: /\* .*? \*/)?; \};$",
+    text,
+    re.M,
+):
+    text = text.replace(line + "\n", "")
+    removed_bf += 1
+if removed_bf != 11:
+    sys.exit("expected to remove 11 orphaned Sources build files, removed %d" % removed_bf)
+
+removed_refs = 0
+for line in re.findall(
+    r"^\t\t1A2B3C4D000000000000007[5-9ABCDEF] /\* .*? \*/ = \{isa = PBXFileReference;[^\n]*path = [A-Za-z]+\.m;[^\n]*$",
+    text,
+    re.M,
+):
+    text = text.replace(line + "\n", "")
+    removed_refs += 1
+if removed_refs != 11:
+    sys.exit("expected to remove 11 orphaned source references, removed %d" % removed_refs)
+
 
 public_dir = os.path.join(ROOT, "src", "xctest", "include", "XCTest")
 HEADERS = sorted(f for f in os.listdir(public_dir) if f.endswith(".h"))
@@ -135,18 +160,6 @@ buildfiles.append(
     % (FOUNDATION_BF, FOUNDATION_REF)
 )
 
-# The 11 pre-existing Sources build files have no name comment on their fileRef.
-# Rewrite them in place so the section reads consistently, then append the rest.
-old_source_bf = re.findall(
-    r"^\t\t1A2B3C4D000000000000008[1-9AB] /\* .*? in Sources \*/ = \{isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007[5-9ABCDEF]; \};$",
-    text,
-    re.M,
-)
-if len(old_source_bf) != 11:
-    sys.exit("expected 11 pre-existing Sources build files, found %d" % len(old_source_bf))
-for line in old_source_bf:
-    text = text.replace(line + "\n", "")
-
 text = insert_in_section(text, "PBXBuildFile", "\n".join(buildfiles))
 
 # --------------------------------------------------------- PBXFileReference
@@ -167,31 +180,14 @@ for name, ref in zip(HEADERS, header_refs):
         "path = %s; sourceTree = \"<group>\"; };" % (ref, name, name)
     )
 
-# A source file reference is needed for every entry in SOURCES, and 0a9c5b0 only
-# left 11 of them behind. Emitting a build file and a group child for a reference
-# that does not exist produces a project that still builds -- xcodebuild drops the
-# unknown reference instead of complaining, so the target simply compiles 11
-# sources and every other check passes -- which is why the four expectations were
-# missing from the Xcode binary while the Makefile's copy was complete. Emit the
-# ones that are missing rather than trusting the list to be a subset of the file.
-existing_refs = set(re.findall(r"\t\t(1A2B3C4D[0-9A-F]{16}) /\* .*? \*/ = \{isa = PBXFileReference;", text))
-for name, ref, _ in SOURCES:
-    if ref in existing_refs:
-        continue
-    refs.append(
-        "\t\t%s /* %s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; "
-        "path = %s; sourceTree = \"<group>\"; };" % (ref, name, name)
-    )
 text = insert_in_section(text, "PBXFileReference", "\n".join(refs))
 
-# Now that every reference exists, a dangling fileRef would still be silently
-# dropped rather than diagnosed, so check the one invariant that is not visible
-# from the build log: each source's build file must resolve to a real reference.
-for name, ref, bf in SOURCES:
-    if not re.search(r"%s /\* %s \*/ = \{isa = PBXFileReference;" % (re.escape(ref), re.escape(name)), text):
-        sys.exit("%s: file reference %s was not emitted" % (name, ref))
+# A dangling fileRef would be silently dropped rather than diagnosed, so check the
+# one invariant that is not visible from the build log: each header's build file
+# must resolve to a real reference.
+for name, ref, bf in zip(HEADERS, header_refs, header_buildfiles):
     if "fileRef = %s /* %s */" % (ref, name) not in text:
-        sys.exit("%s: build file %s does not point at its reference" % (name, bf))
+        sys.exit("%s: header build file %s does not point at its reference" % (name, bf))
 
 # --------------------------------------------------------------- new phases
 def phase(ident, isa, files):
@@ -216,11 +212,11 @@ headers_phase = phase(
     "PBXHeadersBuildPhase",
     [(bf, "%s in Headers" % n) for n, bf in zip(HEADERS, header_buildfiles)],
 )
-sources_phase = phase(
-    SOURCES_PHASE,
-    "PBXSourcesBuildPhase",
-    [(bf, "%s in Sources" % n) for n, _, bf in SOURCES],
-)
+# Empty, and that emptiness is the point: this target compiles nothing. A phase
+# with entries would make xcodebuild look for src/xctest/*.m, which is where those
+# files used to be and where they are not any more. Xcode expects a target to
+# have the phase even when it has nothing to put in it.
+sources_phase = phase(SOURCES_PHASE, "PBXSourcesBuildPhase", [])
 frameworks_phase = phase(
     FRAMEWORKS_PHASE,
     "PBXFrameworksBuildPhase",
@@ -253,6 +249,15 @@ text = text.replace(
 # same include roots. INFOPLIST_FILE and MODULEMAP_FILE point at the same files
 # the Makefile installs, so the two build systems cannot drift on bundle
 # metadata without it being visible in review.
+#
+# OTHER_LDFLAGS is the only thing that makes this a re-exporting shim rather than
+# an empty dylib: -reexport_framework,XCTestCore records XCTestCore in the load
+# commands with the reexport flag, which is what lets a client that linked only
+# -framework XCTest resolve every public symbol. The Makefile passes the same flag
+# to the same linker. XCTestCore.framework itself is not named here -- it is added
+# to this target's Frameworks phase by add-xctestcore-xcode-target.py, which is
+# the script that can mint the file reference, and putting the path in two places
+# is how a link line and a phase end up disagreeing about which one wins.
 common = """\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
 \t\t\t\tCLANG_ENABLE_OBJC_ARC = YES;
 \t\t\t\tCLANG_ENABLE_OBJC_EXCEPTIONS = YES;
@@ -265,7 +270,6 @@ common = """\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
 \t\t\t\tGCC_C_LANGUAGE_STANDARD = c11;
 \t\t\t\tHEADER_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
-\t\t\t\t\t"$(SRCROOT)/src/xctest",
 \t\t\t\t\t"$(SRCROOT)/src/xctest/include",
 \t\t\t\t);
 \t\t\t\tINFOPLIST_FILE = "$(SRCROOT)/src/xctest/Info.plist";
@@ -276,11 +280,14 @@ common = """\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
 \t\t\t\t\t-Wall,
 \t\t\t\t\t-Wextra,
 \t\t\t\t);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.dt.xctest";
-				PRODUCT_NAME = XCTest;
-				SKIP_INSTALL = YES;
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";"""
+\t\t\t\tOTHER_LDFLAGS = (
+\t\t\t\t\t"-Wl,-reexport_framework,XCTestCore",
+\t\t\t\t);
+\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = "com.apple.dt.xctest";
+\t\t\t\tPRODUCT_NAME = XCTest;
+\t\t\t\tSKIP_INSTALL = YES;
+\t\t\t\tVERSIONING_SYSTEM = "apple-generic";
+\t\t\t\tVERSION_INFO_PREFIX = "";"""
 
 # The product and the intermediates get their own directories, separate from the
 # ones the Makefile uses. The project's own configurations still point at
@@ -445,8 +452,40 @@ for required, what in [
     if text.count(required) < 2:
         sys.exit("dangling %s (%s): defined but never referenced" % (what, required))
 
+# The re-export flag is a string in a build setting, not an object, so nothing
+# above notices if it is lost: the project still loads, the target still links,
+# and the smoke test fails at the client because no symbol resolves. Check it
+# here, where a mistake is still a one-line fix. It appears once per
+# configuration, so two is the count that means both are covered.
+if text.count("reexport_framework,XCTestCore") != 2:
+    sys.exit("expected -reexport_framework,XCTestCore in both configurations, found %d"
+             % text.count("reexport_framework,XCTestCore"))
+# src/xctest still legitimately holds Info.plist, module.modulemap, and the public
+# headers, so the invariant is narrower than "no path under src/xctest": nothing in
+# the project may name an implementation file there, because none exists.
+stale = re.findall(r"src/xctest/[^\"'\s]*\.[mh]\b", text)
+if stale:
+    sys.exit("the project still names implementation files under src/xctest: %s" % stale)
+
+# The Sources phase has to be empty. Checking "no build file says in Sources" would
+# be wrong -- every other target in this project has one, and they are all minted
+# from the same 1A2B3C4D prefix -- so the check is on this phase's own file list.
+# The comment on the phase object is the isa with "BuildPhase" cut off, which is
+# why it reads PBXSources here and Sources in the target's buildPhases list.
+sources_files = re.search(
+    r"%s /\* PBXSources \*/ = \{\n\t\t\tisa = PBXSourcesBuildPhase;\n"
+    r"\t\t\tbuildActionMask = \d+;\n\t\t\tfiles = \(\n(.*?)\t\t\t\);\n" % SOURCES_PHASE,
+    text,
+    re.S,
+)
+if sources_files is None:
+    sys.exit("could not find the XCTest Sources phase to check")
+if sources_files.group(1).strip():
+    sys.exit("the XCTest Sources phase is not empty:\n%s" % sources_files.group(1))
+
 with open(PBX, "w") as f:
     f.write(text)
 
 print("added XCTest framework target: %s" % TARGET)
-print("  %d sources, %d public headers" % (len(SOURCES), len(HEADERS)))
+print("  %d sources (this framework is a re-exporting shim), %d public headers"
+      % (len(SOURCES), len(HEADERS)))

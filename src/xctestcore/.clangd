@@ -33,6 +33,7 @@ CompileFlags:
   Add:
     - -I/Users/sunneva/xnuports-root/devel/DarwinSrc/DeveloperTools/Sources/XCTest/src/xctestcore/include
     - -I/Users/sunneva/xnuports-root/devel/DarwinSrc/DeveloperTools/Sources/XCTest/src/xctestcore
+    - -I/Users/sunneva/xnuports-root/devel/DarwinSrc/DeveloperTools/Sources/XCTest/src/xctest/include
     - -fobjc-arc
     - -fblocks
     - -Wall

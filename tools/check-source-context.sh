@@ -32,7 +32,7 @@ trap 'rm -rf "$tmp"' EXIT
 # of them name parameters they have no use for.
 "$CC" -fobjc-arc -fblocks -Wall -Wextra -Werror -Wno-unused-parameter \
     -isysroot "$SDK" \
-    -I"$root/src/xctest" \
+    -I"$root/src/xctestcore" \
     -F"$(dirname "$framework")" \
     -framework XCTest \
     -framework Foundation \

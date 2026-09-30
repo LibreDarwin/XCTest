@@ -9,28 +9,29 @@
 /* Begin PBXBuildFile section */
 		1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000075 /* XCTestConfiguration.m */; };
 		1A2B3C4E0000000000000082 /* XCTTestSelection.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000076 /* XCTTestSelection.m */; };
-		1A2B3C4E0000000000000083 /* XCTestConfigurationLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000077 /* XCTestConfigurationLoader.m */; };
+		1A2B3C4E0000000000000120 /* XCTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000100 /* XCTest.m */; };
+		1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000101 /* XCTestSuite.m */; };
+		1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000102 /* XCTestCase.m */; };
+		1A2B3C4E0000000000000123 /* XCTestRun.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000103 /* XCTestRun.m */; };
+		1A2B3C4E0000000000000124 /* XCTestObservation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000104 /* XCTestObservation.m */; };
+		1A2B3C4E0000000000000125 /* XCTestAssertions.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000105 /* XCTestAssertions.m */; };
+		1A2B3C4E0000000000000126 /* XCTestInternal.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000106 /* XCTestInternal.m */; };
+		1A2B3C4E0000000000000127 /* XCTestSupportTypes.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000107 /* XCTestSupportTypes.m */; };
+		1A2B3C4E0000000000000128 /* XCTestMetrics.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000108 /* XCTestMetrics.m */; };
+		1A2B3C4E0000000000000129 /* XCTestExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000109 /* XCTestExpectation.m */; };
+		1A2B3C4E000000000000012A /* XCTWaiter.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000010A /* XCTWaiter.m */; };
+		1A2B3C4E000000000000012B /* XCTNSNotificationExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000010B /* XCTNSNotificationExpectation.m */; };
+		1A2B3C4E000000000000012C /* XCTNSPredicateExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000010C /* XCTNSPredicateExpectation.m */; };
+		1A2B3C4E000000000000012D /* XCTKVOExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000010D /* XCTKVOExpectation.m */; };
+		1A2B3C4E000000000000012E /* XCTDarwinNotificationExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000010E /* XCTDarwinNotificationExpectation.m */; };
+		1A2B3C4E000000000000012F /* XCTExpectedFailure.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000010F /* XCTExpectedFailure.m */; };
+		1A2B3C4E0000000000000130 /* XCTestConfigurationLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000110 /* XCTestConfigurationLoader.m */; };
 		1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4E00000000000000E1 /* XCTTestSelection.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C1 /* XCTTestSelection.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4E00000000000000E2 /* XCTestCore.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C2 /* XCTestCore.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4E00000000000000E3 /* XCTestConfigurationLoader.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C3 /* XCTestConfigurationLoader.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000E1 /* XCTestConfigurationLoader.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C1 /* XCTestConfigurationLoader.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000E2 /* XCTTestSelection.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C2 /* XCTTestSelection.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000E3 /* XCTestCore.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C3 /* XCTestCore.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000F2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000093 /* Foundation.framework */; };
-		1A2B3C4D0000000000000081 /* XCTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000075 /* XCTest.m */; };
-		1A2B3C4D0000000000000082 /* XCTestSuite.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000076 /* XCTestSuite.m */; };
-		1A2B3C4D0000000000000083 /* XCTestCase.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000077 /* XCTestCase.m */; };
-		1A2B3C4D0000000000000084 /* XCTestRun.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000078 /* XCTestRun.m */; };
-		1A2B3C4D0000000000000085 /* XCTestObservation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000079 /* XCTestObservation.m */; };
-		1A2B3C4D0000000000000086 /* XCTestAssertions.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007A /* XCTestAssertions.m */; };
-		1A2B3C4D0000000000000087 /* XCTestInternal.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007B /* XCTestInternal.m */; };
-		1A2B3C4D0000000000000088 /* XCTestSupportTypes.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007C /* XCTestSupportTypes.m */; };
-		1A2B3C4D0000000000000089 /* XCTestExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007D /* XCTestExpectation.m */; };
-		1A2B3C4D000000000000008A /* XCTWaiter.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007E /* XCTWaiter.m */; };
-		1A2B3C4D000000000000008B /* XCTExpectedFailure.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D000000000000007F /* XCTExpectedFailure.m */; };
-		1A2B3C4D0000000000000110 /* XCTNSNotificationExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000100 /* XCTNSNotificationExpectation.m */; };
-		1A2B3C4D0000000000000111 /* XCTNSPredicateExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000101 /* XCTNSPredicateExpectation.m */; };
-		1A2B3C4D0000000000000112 /* XCTKVOExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000102 /* XCTKVOExpectation.m */; };
-		1A2B3C4D0000000000000113 /* XCTDarwinNotificationExpectation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000103 /* XCTDarwinNotificationExpectation.m */; };
-		1A2B3C4D0000000000000114 /* XCTestMetrics.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000104 /* XCTestMetrics.m */; };
+		1A2B3C4E00000000000000F3 /* XCTestCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000090 /* XCTestCore.framework */; };
 		1A2B3C4D00000000000000E00 /* XCAbstractTest.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C00 /* XCAbstractTest.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4D00000000000000E01 /* XCTActivity.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C01 /* XCTActivity.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4D00000000000000E02 /* XCTAttachment.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D00000000000000C02 /* XCTAttachment.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -93,11 +94,27 @@
 		1A2B3C4E0000000000000092 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000075 /* XCTestConfiguration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestConfiguration.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000076 /* XCTTestSelection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTTestSelection.m; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000077 /* XCTestConfigurationLoader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestConfigurationLoader.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000100 /* XCTest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTest.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000101 /* XCTestSuite.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSuite.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000102 /* XCTestCase.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestCase.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000103 /* XCTestRun.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestRun.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000104 /* XCTestObservation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestObservation.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000105 /* XCTestAssertions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestAssertions.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000106 /* XCTestInternal.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestInternal.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000107 /* XCTestSupportTypes.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSupportTypes.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000108 /* XCTestMetrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestMetrics.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000109 /* XCTestExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestExpectation.m; sourceTree = "<group>"; };
+		1A2B3C4E000000000000010A /* XCTWaiter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTWaiter.m; sourceTree = "<group>"; };
+		1A2B3C4E000000000000010B /* XCTNSNotificationExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTNSNotificationExpectation.m; sourceTree = "<group>"; };
+		1A2B3C4E000000000000010C /* XCTNSPredicateExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTNSPredicateExpectation.m; sourceTree = "<group>"; };
+		1A2B3C4E000000000000010D /* XCTKVOExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTKVOExpectation.m; sourceTree = "<group>"; };
+		1A2B3C4E000000000000010E /* XCTDarwinNotificationExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTDarwinNotificationExpectation.m; sourceTree = "<group>"; };
+		1A2B3C4E000000000000010F /* XCTExpectedFailure.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTExpectedFailure.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000110 /* XCTestConfigurationLoader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestConfigurationLoader.m; sourceTree = "<group>"; };
 		1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestConfiguration.h; sourceTree = "<group>"; };
-		1A2B3C4E00000000000000C1 /* XCTTestSelection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTTestSelection.h; sourceTree = "<group>"; };
-		1A2B3C4E00000000000000C2 /* XCTestCore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCore.h; sourceTree = "<group>"; };
-		1A2B3C4E00000000000000C3 /* XCTestConfigurationLoader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestConfigurationLoader.h; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C1 /* XCTestConfigurationLoader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestConfigurationLoader.h; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C2 /* XCTTestSelection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTTestSelection.h; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C3 /* XCTestCore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCore.h; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000090 /* XCTest.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = XCTest.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D0000000000000091 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.module-map; path = module.modulemap; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000092 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -133,11 +150,6 @@
 		1A2B3C4D00000000000000C1C /* XCTestSkippingImpl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSkippingImpl.h; sourceTree = "<group>"; };
 		1A2B3C4D00000000000000C1D /* XCTestSuite.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSuite.h; sourceTree = "<group>"; };
 		1A2B3C4D00000000000000C1E /* XCTestSuiteRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestSuiteRun.h; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000100 /* XCTNSNotificationExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTNSNotificationExpectation.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000101 /* XCTNSPredicateExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTNSPredicateExpectation.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000102 /* XCTKVOExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTKVOExpectation.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000103 /* XCTDarwinNotificationExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTDarwinNotificationExpectation.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000104 /* XCTestMetrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestMetrics.m; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000018 /* xcresult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xcresult.c; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000019 /* bkeyed.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bkeyed.c; sourceTree = "<group>"; };
 		1A2B3C4D000000000000001A /* xccov.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xccov.c; sourceTree = "<group>"; };
@@ -184,17 +196,6 @@
 		1A2B3C4D0000000000000043 /* xcresulttool */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = xcresulttool; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D0000000000000044 /* libzstd.a */ = {isa = PBXFileReference; explicitFileType = "archive.ar"; includeInIndex = 0; path = libzstd.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D0000000000000045 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
-		1A2B3C4D0000000000000075 /* XCTest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTest.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000076 /* XCTestSuite.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSuite.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000077 /* XCTestCase.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestCase.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000078 /* XCTestRun.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestRun.m; sourceTree = "<group>"; };
-		1A2B3C4D0000000000000079 /* XCTestObservation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestObservation.m; sourceTree = "<group>"; };
-		1A2B3C4D000000000000007A /* XCTestAssertions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestAssertions.m; sourceTree = "<group>"; };
-		1A2B3C4D000000000000007B /* XCTestInternal.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestInternal.m; sourceTree = "<group>"; };
-		1A2B3C4D000000000000007C /* XCTestSupportTypes.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSupportTypes.m; sourceTree = "<group>"; };
-		1A2B3C4D000000000000007D /* XCTestExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestExpectation.m; sourceTree = "<group>"; };
-		1A2B3C4D000000000000007E /* XCTWaiter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTWaiter.m; sourceTree = "<group>"; };
-		1A2B3C4D000000000000007F /* XCTExpectedFailure.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTExpectedFailure.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXHeadersBuildPhase section */
@@ -204,9 +205,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */,
-				1A2B3C4E00000000000000E1 /* XCTTestSelection.h in Headers */,
-				1A2B3C4E00000000000000E2 /* XCTestCore.h in Headers */,
-				1A2B3C4E00000000000000E3 /* XCTestConfigurationLoader.h in Headers */,
+				1A2B3C4E00000000000000E1 /* XCTestConfigurationLoader.h in Headers */,
+				1A2B3C4E00000000000000E2 /* XCTTestSelection.h in Headers */,
+				1A2B3C4E00000000000000E3 /* XCTestCore.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -265,6 +266,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A2B3C4D00000000000000F2 /* Foundation.framework in Frameworks */,
+				1A2B3C4E00000000000000F3 /* XCTestCore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -295,7 +297,23 @@
 			children = (
 				1A2B3C4E0000000000000075 /* XCTestConfiguration.m */,
 				1A2B3C4E0000000000000076 /* XCTTestSelection.m */,
-				1A2B3C4E0000000000000077 /* XCTestConfigurationLoader.m */,
+				1A2B3C4E0000000000000100 /* XCTest.m */,
+				1A2B3C4E0000000000000101 /* XCTestSuite.m */,
+				1A2B3C4E0000000000000102 /* XCTestCase.m */,
+				1A2B3C4E0000000000000103 /* XCTestRun.m */,
+				1A2B3C4E0000000000000104 /* XCTestObservation.m */,
+				1A2B3C4E0000000000000105 /* XCTestAssertions.m */,
+				1A2B3C4E0000000000000106 /* XCTestInternal.m */,
+				1A2B3C4E0000000000000107 /* XCTestSupportTypes.m */,
+				1A2B3C4E0000000000000108 /* XCTestMetrics.m */,
+				1A2B3C4E0000000000000109 /* XCTestExpectation.m */,
+				1A2B3C4E000000000000010A /* XCTWaiter.m */,
+				1A2B3C4E000000000000010B /* XCTNSNotificationExpectation.m */,
+				1A2B3C4E000000000000010C /* XCTNSPredicateExpectation.m */,
+				1A2B3C4E000000000000010D /* XCTKVOExpectation.m */,
+				1A2B3C4E000000000000010E /* XCTDarwinNotificationExpectation.m */,
+				1A2B3C4E000000000000010F /* XCTExpectedFailure.m */,
+				1A2B3C4E0000000000000110 /* XCTestConfigurationLoader.m */,
 				1A2B3C4E0000000000000095 /* include */,
 				1A2B3C4E0000000000000091 /* module.modulemap */,
 				1A2B3C4E0000000000000092 /* Info.plist */,
@@ -315,9 +333,9 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */,
-				1A2B3C4E00000000000000C1 /* XCTTestSelection.h */,
-				1A2B3C4E00000000000000C2 /* XCTestCore.h */,
-				1A2B3C4E00000000000000C3 /* XCTestConfigurationLoader.h */,
+				1A2B3C4E00000000000000C1 /* XCTestConfigurationLoader.h */,
+				1A2B3C4E00000000000000C2 /* XCTTestSelection.h */,
+				1A2B3C4E00000000000000C3 /* XCTestCore.h */,
 			);
 			path = XCTestCore;
 			sourceTree = "<group>";
@@ -326,22 +344,7 @@
 		1A2B3C4D0000000000000094 /* xctest */ = {
 			isa = PBXGroup;
 			children = (
-				1A2B3C4D0000000000000075 /* XCTest.m */,
-				1A2B3C4D0000000000000076 /* XCTestSuite.m */,
-				1A2B3C4D0000000000000077 /* XCTestCase.m */,
-				1A2B3C4D0000000000000078 /* XCTestRun.m */,
-				1A2B3C4D0000000000000079 /* XCTestObservation.m */,
-				1A2B3C4D000000000000007A /* XCTestAssertions.m */,
-				1A2B3C4D000000000000007B /* XCTestInternal.m */,
-				1A2B3C4D000000000000007C /* XCTestSupportTypes.m */,
-				1A2B3C4D000000000000007D /* XCTestExpectation.m */,
-				1A2B3C4D000000000000007E /* XCTWaiter.m */,
-				1A2B3C4D000000000000007F /* XCTExpectedFailure.m */,
-				1A2B3C4D0000000000000100 /* XCTNSNotificationExpectation.m */,
-				1A2B3C4D0000000000000101 /* XCTNSPredicateExpectation.m */,
-				1A2B3C4D0000000000000102 /* XCTKVOExpectation.m */,
-				1A2B3C4D0000000000000103 /* XCTDarwinNotificationExpectation.m */,
-				1A2B3C4D0000000000000104 /* XCTestMetrics.m */,
+
 				1A2B3C4D0000000000000095 /* include */,
 				1A2B3C4D0000000000000091 /* module.modulemap */,
 				1A2B3C4D0000000000000092 /* Info.plist */,
@@ -549,6 +552,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				1A2B3C4E00000000000000D0 /* PBXTargetDependency */,
 			);
 			name = XCTest;
 			productName = XCTest;
@@ -607,6 +611,14 @@
 /* End PBXNativeTarget section */
 
 /* Begin PBXContainerItemProxy section */
+
+		1A2B3C4E00000000000000D1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A2B3C4D0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A2B3C4E00000000000000B3;
+			remoteInfo = XCTestCore;
+		};
 		1A2B3C4D0000000000000058 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1A2B3C4D0000000000000001 /* Project object */;
@@ -624,6 +636,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */
+
+		1A2B3C4E00000000000000D0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A2B3C4E00000000000000B3 /* XCTestCore */;
+			targetProxy = 1A2B3C4E00000000000000D1 /* PBXContainerItemProxy */;
+		};
 		1A2B3C4D000000000000005A /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 1A2B3C4D0000000000000054 /* libzstd */;
@@ -673,7 +691,23 @@
 			files = (
 				1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */,
 				1A2B3C4E0000000000000082 /* XCTTestSelection.m in Sources */,
-				1A2B3C4E0000000000000083 /* XCTestConfigurationLoader.m in Sources */,
+				1A2B3C4E0000000000000120 /* XCTest.m in Sources */,
+				1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */,
+				1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */,
+				1A2B3C4E0000000000000123 /* XCTestRun.m in Sources */,
+				1A2B3C4E0000000000000124 /* XCTestObservation.m in Sources */,
+				1A2B3C4E0000000000000125 /* XCTestAssertions.m in Sources */,
+				1A2B3C4E0000000000000126 /* XCTestInternal.m in Sources */,
+				1A2B3C4E0000000000000127 /* XCTestSupportTypes.m in Sources */,
+				1A2B3C4E0000000000000128 /* XCTestMetrics.m in Sources */,
+				1A2B3C4E0000000000000129 /* XCTestExpectation.m in Sources */,
+				1A2B3C4E000000000000012A /* XCTWaiter.m in Sources */,
+				1A2B3C4E000000000000012B /* XCTNSNotificationExpectation.m in Sources */,
+				1A2B3C4E000000000000012C /* XCTNSPredicateExpectation.m in Sources */,
+				1A2B3C4E000000000000012D /* XCTKVOExpectation.m in Sources */,
+				1A2B3C4E000000000000012E /* XCTDarwinNotificationExpectation.m in Sources */,
+				1A2B3C4E000000000000012F /* XCTExpectedFailure.m in Sources */,
+				1A2B3C4E0000000000000130 /* XCTestConfigurationLoader.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -682,22 +716,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1A2B3C4D0000000000000081 /* XCTest.m in Sources */,
-				1A2B3C4D0000000000000082 /* XCTestSuite.m in Sources */,
-				1A2B3C4D0000000000000083 /* XCTestCase.m in Sources */,
-				1A2B3C4D0000000000000084 /* XCTestRun.m in Sources */,
-				1A2B3C4D0000000000000085 /* XCTestObservation.m in Sources */,
-				1A2B3C4D0000000000000086 /* XCTestAssertions.m in Sources */,
-				1A2B3C4D0000000000000087 /* XCTestInternal.m in Sources */,
-				1A2B3C4D0000000000000088 /* XCTestSupportTypes.m in Sources */,
-				1A2B3C4D0000000000000089 /* XCTestExpectation.m in Sources */,
-				1A2B3C4D000000000000008A /* XCTWaiter.m in Sources */,
-				1A2B3C4D000000000000008B /* XCTExpectedFailure.m in Sources */,
-				1A2B3C4D0000000000000110 /* XCTNSNotificationExpectation.m in Sources */,
-				1A2B3C4D0000000000000111 /* XCTNSPredicateExpectation.m in Sources */,
-				1A2B3C4D0000000000000112 /* XCTKVOExpectation.m in Sources */,
-				1A2B3C4D0000000000000113 /* XCTDarwinNotificationExpectation.m in Sources */,
-				1A2B3C4D0000000000000114 /* XCTestMetrics.m in Sources */,
+
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -854,7 +873,6 @@
 				GCC_C_LANGUAGE_STANDARD = c11;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/src/xctest",
 					"$(SRCROOT)/src/xctest/include",
 				);
 				INFOPLIST_FILE = "$(SRCROOT)/src/xctest/Info.plist";
@@ -864,6 +882,9 @@
 				OTHER_CFLAGS = (
 					-Wall,
 					-Wextra,
+				);
+				OTHER_LDFLAGS = (
+					"-Wl,-reexport_framework,XCTestCore",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.dt.xctest";
 				PRODUCT_NAME = XCTest;
@@ -893,7 +914,6 @@
 				GCC_C_LANGUAGE_STANDARD = c11;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/src/xctest",
 					"$(SRCROOT)/src/xctest/include",
 				);
 				INFOPLIST_FILE = "$(SRCROOT)/src/xctest/Info.plist";
@@ -903,6 +923,9 @@
 				OTHER_CFLAGS = (
 					-Wall,
 					-Wextra,
+				);
+				OTHER_LDFLAGS = (
+					"-Wl,-reexport_framework,XCTestCore",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.dt.xctest";
 				PRODUCT_NAME = XCTest;

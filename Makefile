@@ -21,9 +21,11 @@ AR     := /Users/sunneva/xnuports-root/devel/xcode-tools/build/release/Developer
 BUILD_DIR := build/$(CONFIG)
 OBJDIR    := $(BUILD_DIR)/obj
 LIBDIR    := $(BUILD_DIR)/lib
-# XCTest.framework's objects are kept apart from the C tools' so that no .o is
-# ever shared between a -std=c11 translation unit and an ObjC one.
-XCTEST_OBJDIR := $(BUILD_DIR)/obj-xctest
+# XCTestCore.framework's objects are kept apart from the C tools' so that no .o is
+# ever shared between a -std=c11 translation unit and an ObjC one.  XCTest.framework
+# links no objects of its own -- it re-exports XCTestCore -- so there is no third
+# directory to keep separate.
+XCTESTCORE_OBJDIR := $(BUILD_DIR)/obj-xctestcore
 
 # -Isrc/zstd is in the tool flags as well as the library's: xcresult.c reaches
 # zstd.h with angle brackets, so the header directory has to be on the search
@@ -46,15 +48,23 @@ ZSTD_CFLAGS := $(OPT) -std=c11 -D_DARWIN_C_SOURCE -isysroot "$(SDK)" \
 	  -Isrc/zstd -Isrc/zstd/common -Isrc/zstd/decompress \
 	  -DZSTD_LEGACY_SUPPORT=0 -Wall -Wextra -Wno-unused-parameter
 
-# XCTest.framework's sources are Objective-C, so they cannot share CFLAGS: the
-# -std=c11 above is a hard error for an ObjC translation unit.  -fobjc-arc is
-# what the whole framework is written under.  The public headers are found
-# through <XCTest/...>, so src/xctest/include is the include root, and
-# src/xctest is on the path for the private headers that sit next to the .m
-# files.  No -Werror here, matching CFLAGS: the C tools do not use it either,
+# Every implementation in both XCTest.framework and XCTestCore.framework is
+# Objective-C, so neither can share CFLAGS: the -std=c11 above is a hard error
+# for an ObjC translation unit.  -fobjc-arc is what the whole tree is written
+# under.  No -Werror here, matching CFLAGS: the C tools do not use it either,
 # and a warning in a vendored tree should not stop the build.
+#
+# XCTestCore.framework is where the test machinery is implemented, so this is
+# the flags the .m files are built with: src/xctestcore/include is its own
+# include root, src/xctestcore is on the path for the private headers that sit
+# next to the .m files, and src/xctest/include is on it because the machinery
+# declares itself in the public headers and imports them as <XCTest/...>.
+# A header directory being on two include roots is not a link dependency: the
+# dependency between the two frameworks is XCTestCore first, XCTest re-exporting
+# it (see the note on XCTEST_FW_LDFLAGS).
 OBJCFLAGS := $(OPT) -fobjc-arc -fobjc-exceptions -fblocks -isysroot "$(SDK)" \
-	  -Isrc/xctest/include -Isrc/xctest -Wall -Wextra
+	  -Isrc/xctestcore/include -Isrc/xctestcore -Isrc/xctest/include \
+	  -Wall -Wextra
 
 # Apple's xccov links XCTHarness, DVTFoundation and IDEFoundation; its
 # xcresulttool links CoreServices, UniformTypeIdentifiers and OSAnalytics.
@@ -69,14 +79,31 @@ FW := -framework CoreFoundation
 # expect from a framework, and the shape the -install_name below advertises.
 #
 # The binary is linked as a dylib with an @rpath install name rather than an
-# absolute one, so the same build works from build/ or from $(PREFIX)/lib.  It
-# links Foundation and nothing else: no dylib dependency on Apple's own
+# absolute one, so the same build works from build/ or from $(PREFIX)/lib.
+#
+# Apple's XCTest.framework is 110 KB and exports exactly one symbol of its own
+# (_XCUIEnableUIAutomation); the whole public API reaches the client by
+# re-exporting XCTestCore.  Verified against the reference with
+# `otool -arch arm64 -L`, which reports
+#
+#     @rpath/XCTestCore.framework/Versions/A/XCTestCore (reexport)
+#
+# for the public framework, and against the symbol tables, where XCTestCase,
+# XCTestSuite, XCTestRun, XCTest, XCTestObservationCenter, XCTestExpectation,
+# XCTWaiter, XCTIssue, XCTAttachment and every metric class are all *defined*
+# in XCTestCore and defined nowhere in XCTest.  So the implementation lives in
+# src/xctestcore and this framework is a shim: -reexport_framework is what makes
+# `-framework XCTest` still satisfy a client that links the public name.
+#
+# Foundation is the only real link.  XCTestCore is found through -F and the
+# install name is @rpath, so there is still no dependency on Apple's own
 # XCTest.framework, which is the whole point of building this.
 XCTEST_FW_DIR  := $(BUILD_DIR)/XCTest.framework
 XCTEST_FW_VER  := $(XCTEST_FW_DIR)/Versions/A
 XCTEST_FW      := $(XCTEST_FW_VER)/XCTest
 XCTEST_FW_STAMP := $(XCTEST_FW_DIR)/.stamp
-XCTEST_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTest.framework/Versions/A/XCTest" -framework Foundation
+XCTEST_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTest.framework/Versions/A/XCTest" \
+	  -F"$(BUILD_DIR)" -framework Foundation -Wl,-reexport_framework,XCTestCore
 
 # Every public header is installed, not just the ones a given object happens to
 # include: a framework that ships a binary but not its full header set is
@@ -86,9 +113,10 @@ XCTEST_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTest.framework/Versions
 # The five private headers (XCTestInternal.h, XCTestFoundationCompat.h,
 # XCTestObservationInternal.h, XCTestExpectationInternal.h and
 # XCTestAssertionFormats.h) are deliberately not installed: they sit in
-# src/xctest rather than include/XCTest because they are not part of the
+# src/xctestcore rather than include/XCTest because they are not part of the
 # public API, and a client that needs one of them is a client we cannot
-# support the same way twice.
+# support the same way twice.  They moved to src/xctestcore with the
+# implementation that includes them.
 XCTEST_FW_HEADERS := src/xctest/include/XCTest/XCAbstractTest.h \
 	src/xctest/include/XCTest/XCTActivity.h \
 	src/xctest/include/XCTest/XCTAttachment.h \
@@ -121,41 +149,31 @@ XCTEST_FW_HEADERS := src/xctest/include/XCTest/XCAbstractTest.h \
 	src/xctest/include/XCTest/XCTestSuite.h \
 	src/xctest/include/XCTest/XCTestSuiteRun.h
 
-XCTEST_PRIV_HDRS := src/xctest/XCTestAssertionFormats.h \
-	src/xctest/XCTestExpectationInternal.h \
-	src/xctest/XCTestFoundationCompat.h \
-	src/xctest/XCTestInternal.h \
-	src/xctest/XCTestObservationInternal.h
+XCTEST_FW_OBJS :=
 
-XCTEST_FW_OBJS := $(XCTEST_OBJDIR)/XCTest.o $(XCTEST_OBJDIR)/XCTestSuite.o \
-	$(XCTEST_OBJDIR)/XCTestCase.o $(XCTEST_OBJDIR)/XCTestRun.o \
-	$(XCTEST_OBJDIR)/XCTestObservation.o $(XCTEST_OBJDIR)/XCTestAssertions.o \
-	$(XCTEST_OBJDIR)/XCTestInternal.o $(XCTEST_OBJDIR)/XCTestSupportTypes.o \
-	$(XCTEST_OBJDIR)/XCTestMetrics.o \
-	$(XCTEST_OBJDIR)/XCTestExpectation.o $(XCTEST_OBJDIR)/XCTWaiter.o \
-	$(XCTEST_OBJDIR)/XCTNSNotificationExpectation.o \
-	$(XCTEST_OBJDIR)/XCTNSPredicateExpectation.o \
-	$(XCTEST_OBJDIR)/XCTKVOExpectation.o \
-	$(XCTEST_OBJDIR)/XCTDarwinNotificationExpectation.o \
-	$(XCTEST_OBJDIR)/XCTExpectedFailure.o
-
-# XCTestCore.framework is Apple's private half of a test run: it holds the value
-# that describes a run and the driver that executes it, and no test author ever
-# compiles against it. It is a separate framework rather than part of XCTest
-# because that separation is load-bearing -- see the note on the dependency
-# direction in the module map.
+# XCTestCore.framework is Apple's private half of a test run, and it is where the
+# whole test machinery is implemented: XCTest, XCTestCase, XCTestSuite,
+# XCTestRun, the observation center, the expectations, the assertions and the
+# metrics.  The public framework holds the headers and re-exports this one.
+#
+# The symbol tables are the authority for that split, not the class lists: the
+# class dump for the public framework names XCTestCase, XCTestSuite and
+# XCTMemoryMetric because they are *referenced* there, but every one of them has
+# its `T` definitions in XCTestCore and none in XCTest.  The public framework's
+# own 63 defined methods are the XCTestCase UI-testing categories
+# (MemoryLeakTesting, XCUIAlertMonitoring, XCUIInterruptionMonitoring) and a
+# handful of XCUIAutomation metric categories, none of which this port
+# reimplements -- there is no XCUIAutomation.framework to put them in.
 #
 # It gets its own object directory for the same reason XCTest.framework does: the
 # two are built from a different include root, and sharing a .o between them
 # would mean a header edit on one side silently deciding the other's build.
 XCTESTCORE_OBJDIR := $(BUILD_DIR)/obj-xctestcore
-XCTESTCORE_OBJCFLAGS := $(OPT) -fobjc-arc -fobjc-exceptions -fblocks -isysroot "$(SDK)" \
-	  -Isrc/xctestcore/include -Isrc/xctestcore -Wall -Wextra
 
 # The same versioned-bundle shape as XCTest.framework, with an @rpath install
-# name for the same reason. Foundation is the only link: this slice is value
-# types, so there is nothing here to justify a dependency on the public
-# XCTest.framework, and adding one would make the private framework look like
+# name for the same reason. Foundation is the only link: this is the bottom of
+# the pair, and adding a dependency on the public XCTest.framework would invert
+# the reference's own direction and make the private framework look like
 # something a test bundle could load.
 XCTESTCORE_FW_DIR  := $(BUILD_DIR)/XCTestCore.framework
 XCTESTCORE_FW_VER  := $(XCTESTCORE_FW_DIR)/Versions/A
@@ -166,19 +184,37 @@ XCTESTCORE_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTestCore.framework/
 # The installed headers, and the module map's umbrella. The umbrella is listed
 # after the headers it imports, which is the order a reader wants but not the
 # order anything depends on -- make does not care, and the header guard does
-# the rest. The private header stays in src/xctestcore: it declares Foundation
-# members for this implementation's own use, and a client that needs one is a
-# client we cannot support the same way twice.
+# the rest. The private headers stay in src/xctestcore: they declare Foundation
+# members and the machinery's own internals for this implementation's use, and a
+# client that needs one is a client we cannot support the same way twice.
 XCTESTCORE_API_HDRS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h \
 	src/xctestcore/include/XCTestCore/XCTestConfigurationLoader.h \
 	src/xctestcore/include/XCTestCore/XCTTestSelection.h
 XCTESTCORE_FW_HEADERS := $(XCTESTCORE_API_HDRS) src/xctestcore/include/XCTestCore/XCTestCore.h
-XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h
+XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h \
+	src/xctestcore/XCTestAssertionFormats.h \
+	src/xctestcore/XCTestExpectationInternal.h \
+	src/xctestcore/XCTestFoundationCompat.h \
+	src/xctestcore/XCTestInternal.h \
+	src/xctestcore/XCTestObservationInternal.h
 
 # One object per source, spelled out. A pattern rule would be shorter and would
 # not build under bmake, and the whole reason this project builds under both is
 # that nothing here depends on a GNU extension.
-XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o $(XCTESTCORE_OBJDIR)/XCTestConfigurationLoader.o $(XCTESTCORE_OBJDIR)/XCTTestSelection.o
+XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTest.o $(XCTESTCORE_OBJDIR)/XCTestSuite.o \
+	$(XCTESTCORE_OBJDIR)/XCTestCase.o $(XCTESTCORE_OBJDIR)/XCTestRun.o \
+	$(XCTESTCORE_OBJDIR)/XCTestObservation.o $(XCTESTCORE_OBJDIR)/XCTestAssertions.o \
+	$(XCTESTCORE_OBJDIR)/XCTestInternal.o $(XCTESTCORE_OBJDIR)/XCTestSupportTypes.o \
+	$(XCTESTCORE_OBJDIR)/XCTestMetrics.o \
+	$(XCTESTCORE_OBJDIR)/XCTestExpectation.o $(XCTESTCORE_OBJDIR)/XCTWaiter.o \
+	$(XCTESTCORE_OBJDIR)/XCTNSNotificationExpectation.o \
+	$(XCTESTCORE_OBJDIR)/XCTNSPredicateExpectation.o \
+	$(XCTESTCORE_OBJDIR)/XCTKVOExpectation.o \
+	$(XCTESTCORE_OBJDIR)/XCTDarwinNotificationExpectation.o \
+	$(XCTESTCORE_OBJDIR)/XCTExpectedFailure.o \
+	$(XCTESTCORE_OBJDIR)/XCTestConfiguration.o \
+	$(XCTESTCORE_OBJDIR)/XCTestConfigurationLoader.o \
+	$(XCTESTCORE_OBJDIR)/XCTTestSelection.o
 
 XCCOV        := $(BUILD_DIR)/xccov
 XCCOV_OBJS   := $(OBJDIR)/xcresult.o $(OBJDIR)/bkeyed.o $(OBJDIR)/xccov.o
@@ -225,90 +261,91 @@ $(XCTEST_FW_STAMP): $(XCTEST_FW) src/xctest/module.modulemap src/xctest/Info.pli
 	ln -s Versions/Current/XCTest $(XCTEST_FW_DIR)/XCTest
 	@touch $@
 
-$(XCTEST_FW): $(XCTEST_FW_OBJS)
+# $(XCTEST_FW_OBJS) is empty, so this links no object at all: the binary exists to
+# carry the install name and the re-export, which is the whole of what Apple's
+# 110 KB shim adds over XCTestCore.  The XCTestCore stamp is a prerequisite, not
+# the binary itself, because -F only has to find the bundle on disk at link time
+# and the install name is @rpath -- the shim must not embed a build path.
+$(XCTEST_FW): $(XCTEST_FW_OBJS) $(XCTESTCORE_FW_STAMP)
 	@mkdir -p $(XCTEST_FW_VER)
 	$(CC) $(OBJCFLAGS) $(XCTEST_FW_LDFLAGS) -o $@ $(XCTEST_FW_OBJS)
 
-# Every object depends on the whole public header set, because the umbrella
-# header XCTest.h includes all of it and most translation units import the
-# umbrella: a header reached through the umbrella is still a header the object
-# was compiled against, and listing only the directly-imported ones would let
-# make keep a stale .o after an edit to a header two levels down.  That
+# Every machinery object depends on the whole public header set, because the
+# umbrella header XCTest.h includes all of it and most translation units import
+# the umbrella: a header reached through the umbrella is still a header the
+# object was compiled against, and listing only the directly-imported ones would
+# let make keep a stale .o after an edit to a header two levels down.  That
 # over-approximates for the two or three units that import a narrow subset
 # directly (XCTWaiter.m, XCTestObservation.m), which costs an occasional
 # redundant recompile and never a wrong one.  The private headers are listed
 # per unit because those genuinely differ, and that is where the discrimination
 # is worth having.
-$(XCTEST_OBJDIR)/XCTest.o: src/xctest/XCTest.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTest.m
+$(XCTESTCORE_OBJDIR)/XCTest.o: src/xctestcore/XCTest.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTest.m
 
-$(XCTEST_OBJDIR)/XCTestSuite.o: src/xctest/XCTestSuite.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestSuite.m
+$(XCTESTCORE_OBJDIR)/XCTestSuite.o: src/xctestcore/XCTestSuite.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestSuite.m
 
-$(XCTEST_OBJDIR)/XCTestCase.o: src/xctest/XCTestCase.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h src/xctest/XCTestExpectationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestCase.m
+$(XCTESTCORE_OBJDIR)/XCTestCase.o: src/xctestcore/XCTestCase.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h src/xctestcore/XCTestExpectationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestCase.m
 
-$(XCTEST_OBJDIR)/XCTestRun.o: src/xctest/XCTestRun.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestRun.m
+$(XCTESTCORE_OBJDIR)/XCTestRun.o: src/xctestcore/XCTestRun.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestRun.m
 
-$(XCTEST_OBJDIR)/XCTestObservation.o: src/xctest/XCTestObservation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestObservationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestObservation.m
+$(XCTESTCORE_OBJDIR)/XCTestObservation.o: src/xctestcore/XCTestObservation.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestObservation.m
 
-$(XCTEST_OBJDIR)/XCTestAssertions.o: src/xctest/XCTestAssertions.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestAssertionFormats.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestAssertions.m
+$(XCTESTCORE_OBJDIR)/XCTestAssertions.o: src/xctestcore/XCTestAssertions.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestAssertionFormats.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestAssertions.m
 
-$(XCTEST_OBJDIR)/XCTestInternal.o: src/xctest/XCTestInternal.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestInternal.m
+$(XCTESTCORE_OBJDIR)/XCTestInternal.o: src/xctestcore/XCTestInternal.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestInternal.m
 
-$(XCTEST_OBJDIR)/XCTestSupportTypes.o: src/xctest/XCTestSupportTypes.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestSupportTypes.m
+$(XCTESTCORE_OBJDIR)/XCTestSupportTypes.o: src/xctestcore/XCTestSupportTypes.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestSupportTypes.m
 
 # The performance category adds a category on XCTestCase and reaches the
 # test case's private ivars through accessors, so it depends on XCTestCase.m's
 # interface as well as the compat header it calls -componentsJoinedByString: on.
-$(XCTEST_OBJDIR)/XCTestMetrics.o: src/xctest/XCTestMetrics.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestCase.m
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestMetrics.m
+$(XCTESTCORE_OBJDIR)/XCTestMetrics.o: src/xctestcore/XCTestMetrics.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestCase.m
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestMetrics.m
 
-$(XCTEST_OBJDIR)/XCTestExpectation.o: src/xctest/XCTestExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTestExpectation.m
+$(XCTESTCORE_OBJDIR)/XCTestExpectation.o: src/xctestcore/XCTestExpectation.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestExpectationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestExpectation.m
 
-$(XCTEST_OBJDIR)/XCTWaiter.o: src/xctest/XCTWaiter.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTWaiter.m
+$(XCTESTCORE_OBJDIR)/XCTWaiter.o: src/xctestcore/XCTWaiter.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestExpectationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTWaiter.m
 
-# The four subclass units share a dependency set: each is a subclass of
-# XCTestExpectation, so each needs the base class's private header for the poll
-# hook and the issue-attribution helper, plus the compatibility header for the
-# Foundation or notify(3) API its own feature is missing from the reduced SDK.
-$(XCTEST_OBJDIR)/XCTNSNotificationExpectation.o: src/xctest/XCTNSNotificationExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTNSNotificationExpectation.m
+$(XCTESTCORE_OBJDIR)/XCTNSNotificationExpectation.o: src/xctestcore/XCTNSNotificationExpectation.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestExpectationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTNSNotificationExpectation.m
 
-$(XCTEST_OBJDIR)/XCTNSPredicateExpectation.o: src/xctest/XCTNSPredicateExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h src/xctest/XCTestInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTNSPredicateExpectation.m
+$(XCTESTCORE_OBJDIR)/XCTNSPredicateExpectation.o: src/xctestcore/XCTNSPredicateExpectation.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestExpectationInternal.h src/xctestcore/XCTestInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTNSPredicateExpectation.m
 
-$(XCTEST_OBJDIR)/XCTKVOExpectation.o: src/xctest/XCTKVOExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTKVOExpectation.m
+$(XCTESTCORE_OBJDIR)/XCTKVOExpectation.o: src/xctestcore/XCTKVOExpectation.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestExpectationInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTKVOExpectation.m
 
-$(XCTEST_OBJDIR)/XCTDarwinNotificationExpectation.o: src/xctest/XCTDarwinNotificationExpectation.m $(XCTEST_FW_HEADERS) src/xctest/XCTestFoundationCompat.h src/xctest/XCTestExpectationInternal.h src/xctest/XCTestInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTDarwinNotificationExpectation.m
+$(XCTESTCORE_OBJDIR)/XCTDarwinNotificationExpectation.o: src/xctestcore/XCTDarwinNotificationExpectation.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestExpectationInternal.h src/xctestcore/XCTestInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTDarwinNotificationExpectation.m
 
-$(XCTEST_OBJDIR)/XCTExpectedFailure.o: src/xctest/XCTExpectedFailure.m $(XCTEST_FW_HEADERS) src/xctest/XCTestInternal.h
-	@mkdir -p $(XCTEST_OBJDIR)
-	$(CC) $(OBJCFLAGS) -c -o $@ src/xctest/XCTExpectedFailure.m
+$(XCTESTCORE_OBJDIR)/XCTExpectedFailure.o: src/xctestcore/XCTExpectedFailure.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTExpectedFailure.m
 
 # XCTestCore.framework is assembled the same way, for the same reason a
 # framework cannot be a make target in its own right: its stamp goes stale
@@ -330,11 +367,11 @@ $(XCTESTCORE_FW_STAMP): $(XCTESTCORE_FW) src/xctestcore/module.modulemap src/xct
 
 $(XCTESTCORE_FW): $(XCTESTCORE_FW_OBJS)
 	@mkdir -p $(XCTESTCORE_FW_VER)
-	$(CC) $(XCTESTCORE_OBJCFLAGS) $(XCTESTCORE_FW_LDFLAGS) -o $@ $(XCTESTCORE_FW_OBJS)
+	$(CC) $(OBJCFLAGS) $(XCTESTCORE_FW_LDFLAGS) -o $@ $(XCTESTCORE_FW_OBJS)
 
 $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o: src/xctestcore/XCTestConfiguration.m $(XCTESTCORE_FW_HEADERS) $(XCTESTCORE_PRIV_HDRS)
 	@mkdir -p $(XCTESTCORE_OBJDIR)
-	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfiguration.m
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfiguration.m
 
 # Depends on the API headers rather than on $(XCTESTCORE_FW_HEADERS): the
 # umbrella imports all of them, so a rule that named it as a prerequisite would
@@ -342,7 +379,7 @@ $(XCTESTCORE_OBJDIR)/XCTestConfiguration.o: src/xctestcore/XCTestConfiguration.m
 # wrong about in the other direction, not in this one.
 $(XCTESTCORE_OBJDIR)/XCTTestSelection.o: src/xctestcore/XCTTestSelection.m $(XCTESTCORE_API_HDRS) $(XCTESTCORE_PRIV_HDRS)
 	@mkdir -p $(XCTESTCORE_OBJDIR)
-	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTTestSelection.m
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTTestSelection.m
 
 # The loader is the one XCTestCore unit that reaches for os_log and dispatch, so
 # it is also the one whose header dependency is worth naming exactly: it imports
@@ -350,7 +387,7 @@ $(XCTESTCORE_OBJDIR)/XCTTestSelection.o: src/xctestcore/XCTTestSelection.m $(XCT
 # without the umbrella being dragged in.
 $(XCTESTCORE_OBJDIR)/XCTestConfigurationLoader.o: src/xctestcore/XCTestConfigurationLoader.m $(XCTESTCORE_API_HDRS) $(XCTESTCORE_PRIV_HDRS)
 	@mkdir -p $(XCTESTCORE_OBJDIR)
-	$(CC) $(XCTESTCORE_OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfigurationLoader.m
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfigurationLoader.m
 
 $(XCCOV): $(XCCOV_OBJS) $(LIBZSTD)
 	@mkdir -p $(BUILD_DIR)
