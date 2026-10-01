@@ -120,6 +120,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly, nullable) ObjectType firstObject;
 - (NSUInteger)indexOfObject:(ObjectType)object;
 - (NSUInteger)indexOfObjectIdenticalTo:(ObjectType)object;
+/// The first index whose element passes `predicate`, or NSNotFound. A probe
+/// confirms the runtime implements it; the ordering partition is the caller.
+- (NSUInteger)indexOfObjectPassingTest:(BOOL (^)(ObjectType obj, NSUInteger idx, BOOL *stop))predicate;
 /// Flattens the array's elements into one string, which is how a list of test
 /// names gets rendered in a single log line.
 - (NSString *)componentsJoinedByString:(nullable NSString *)separator;
@@ -129,6 +132,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)insertObject:(ObjectType)object atIndex:(NSUInteger)index;
 - (void)removeObject:(ObjectType)object;
 - (void)removeObjectIdenticalTo:(ObjectType)object;
+/// Swaps two elements by index. A probe confirms the runtime implements it; the
+/// shuffle and the half-stable partition are built on it.
+- (void)exchangeObjectAtIndex:(NSUInteger)index1 withObjectAtIndex:(NSUInteger)index2;
+/// Removes the elements in `range`. The removal is by range rather than by
+/// predicate because the partition has already moved the matching elements into
+/// one contiguous run at the tail, leaving that run to drop.
+- (void)removeObjectsInRange:(NSRange)range;
 @end
 
 // Set filtering the reduced NSSet.h omits. A probe confirms the runtime

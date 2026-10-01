@@ -186,6 +186,13 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 /// when arguments are not part of the question being asked.
 @property (nonatomic, readonly) XCTTestIdentifier *identifierWithoutArguments;
 
+/// The identifier of the enclosing scope. When the receiver carries arguments
+/// it is the receiver without them, so an argument-bearing selection maps back
+/// onto the unparameterized test case it came from; otherwise it is one
+/// component shorter, the class of a method or the container of a suite. Nil
+/// only for an identifier with no components, which has no enclosing scope.
+@property (nonatomic, readonly, nullable) XCTTestIdentifier *parentIdentifier;
+
 - (XCTTestIdentifier *)childIdentifierWithComponent:(NSString *)component
                                        isContainer:(BOOL)isContainer;
 - (XCTTestIdentifier *)childIdentifierWithArgumentIDs:(nullable NSSet<NSData *> *)argumentIDs;

@@ -313,6 +313,15 @@ static NSString *const XCTTestIdentifierLegacyMethodNameKey = @"methodName";
 static NSString *const XCTTestIdentifierBundleNameKey = @"bundleName";
 static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
 
+/// The one core constructor for the Objective-C spelling. Declared in a category
+/// of its own so both the part-by-part entry points in the primary
+/// implementation and the string-parsing methods in the creation category reach
+/// the same method rather than a second, subtly different one.
+@interface XCTTestIdentifier (XCTTestIdentifierPrivateCore)
+- (instancetype)_initWithClassAndMethodComponents:(NSArray<NSString *> *)components
+                             preserveModulePrefix:(BOOL)preserveModulePrefix;
+@end
+
 @implementation XCTTestIdentifier
 {
     NSArray<NSString *> *_components;
@@ -356,14 +365,14 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
 
 - (instancetype)initWithClassAndMethodComponents:(NSArray<NSString *> *)components
 {
-    // A class-and-method identifier says so in its options, and keeps saying so
-    // across a round trip: the bit is stored, not inferred from the component
-    // count. A two-component identifier and a Swift Testing two-component
-    // identifier are otherwise indistinguishable.
-    NSUInteger options = XCTTestIdentifierOptionClassAndMethod;
-    // A class-and-method identifier is a leaf by construction: a test method
-    // cannot contain other identifiers.
-    return [self initWithComponents:components argumentIDs:nil options:options];
+    // Every way of spelling an Objective-C identifier by its parts ends up here,
+    // and this is only a layer over the one core constructor, exactly as
+    // -initWithStringRepresentation: is: the same components, the module prefix
+    // stripped rather than kept. Sharing the core is what makes a selection
+    // parsed from a string compare equal to the identifier a test case builds
+    // for itself; a second, subtly different constructor would not.
+    return [self _initWithClassAndMethodComponents:components
+                             preserveModulePrefix:NO];
 }
 
 - (instancetype)initWithClassName:(NSString *)className
@@ -581,6 +590,36 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
                                            options:self.options];
 }
 
+- (XCTTestIdentifier *)parentIdentifier
+{
+    if (self.componentCount == 0) {
+        return nil;
+    }
+    // With arguments the enclosing scope is the same test without them. A
+    // class-and-method identifier keeps an empty argument set rather than none,
+    // which is the spelling its unparameterized case carries too, so the two
+    // compare equal; anything else has no arguments and gains the container and
+    // Swift-method bits instead.
+    if (self.argumentIDs.count != 0) {
+        if (self.usesClassAndMethodSemantics && self.componentCount == 2) {
+            return [[[self class] alloc] initWithComponents:self.components
+                                               argumentIDs:[NSSet set]
+                                                   options:self.options];
+        }
+        return [[[self class] alloc] initWithComponents:self.components
+                                           argumentIDs:nil
+                                               options:self.options | XCTTestIdentifierOptionContainer | XCTTestIdentifierOptionSwiftMethod];
+    }
+    // Without arguments the enclosing scope is one component shorter: a
+    // method's class, or a suite's parent. It is a container, and a Swift
+    // method's spelling is dropped along with its method component.
+    NSArray<NSString *> *parentComponents =
+        [self.components subarrayWithRange:NSMakeRange(0, self.componentCount - 1)];
+    return [[[self class] alloc] initWithComponents:parentComponents
+                                       argumentIDs:nil
+                                           options:(self.options & ~XCTTestIdentifierOptionSwiftMethod) | XCTTestIdentifierOptionContainer];
+}
+
 - (XCTTestIdentifier *)childIdentifierWithComponent:(NSString *)component
                                        isContainer:(BOOL)isContainer
 {
@@ -758,6 +797,29 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     return [self initWithComponents:components argumentIDs:nil options:options];
 }
 
+- (XCTTestIdentifier *)swiftMethodCounterpart
+{
+    if (!self.usesClassAndMethodSemantics || self.componentCount != 2 || !self.isSwiftMethod) {
+        // A suite is not a method under another spelling, and a method that is
+        // not already a Swift one has no Swift reading to give.
+        return nil;
+    }
+    // The same components and the same arguments, read as Swift. For an
+    // identifier that came from -initWithStringRepresentation: that is the
+    // identifier itself, and the copy is the point: the reading is forced here
+    // rather than inherited, so a subclass that reports different option bits
+    // for the same components still gets the Swift reading asked for.
+    return [[XCTTestIdentifier alloc] initWithComponents:self.components
+                                             argumentIDs:self.argumentIDs
+                                                 options:self.options | XCTTestIdentifierOptionSwiftMethod];
+}
+
+@end
+
+#pragma mark - XCTTestIdentifierPrivateCore
+
+@implementation XCTTestIdentifier (XCTTestIdentifierPrivateCore)
+
 /// The core of the Objective-C spelling, and where the two options the
 /// identifier carries come from: a single component is a container, two are a
 /// class and a method, and either the class was spelled with its module or the
@@ -835,23 +897,6 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     return [self initWithComponents:identifierComponents
                         argumentIDs:argumentIDs
                             options:options];
-}
-
-- (XCTTestIdentifier *)swiftMethodCounterpart
-{
-    if (!self.usesClassAndMethodSemantics || self.componentCount != 2 || !self.isSwiftMethod) {
-        // A suite is not a method under another spelling, and a method that is
-        // not already a Swift one has no Swift reading to give.
-        return nil;
-    }
-    // The same components and the same arguments, read as Swift. For an
-    // identifier that came from -initWithStringRepresentation: that is the
-    // identifier itself, and the copy is the point: the reading is forced here
-    // rather than inherited, so a subclass that reports different option bits
-    // for the same components still gets the Swift reading asked for.
-    return [[XCTTestIdentifier alloc] initWithComponents:self.components
-                                             argumentIDs:self.argumentIDs
-                                                 options:self.options | XCTTestIdentifierOptionSwiftMethod];
 }
 
 @end

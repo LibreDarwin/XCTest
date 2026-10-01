@@ -106,6 +106,28 @@
     [self performTest:run];
 }
 
+#pragma mark - Ordering
+
+- (NSComparisonResult)defaultExecutionOrderCompare:(XCTest *)other
+{
+    // An object that is not a runnable test has no natural place in a test
+    // order, so the base refuses to rank it either way. A container overrides
+    // this to order its own kind; the base answer is only reached by a test that
+    // is not a case and not a suite, which cannot occur in a real run.
+    return NSOrderedSame;
+}
+
+- (void)_removeTestsWithIdentifierInSet:(XCTTestIdentifierSet *)set
+{
+    // A single test is removed by the container that holds it, not by itself.
+    // Only a container has children to filter, so the base does nothing.
+}
+
+- (void)_removeTestsWithoutIdentifierInSet:(XCTTestIdentifierSet *)set
+{
+    // The complement of the above, and likewise a container's concern.
+}
+
 #pragma mark - Lifecycle
 
 - (void)setUp

@@ -7,6 +7,7 @@
 #import <XCTest/XCTestCase.h>
 #import <XCTest/XCTestSuiteRun.h>
 #import <XCTest/XCTIssue.h>
+#import <XCTestCore/XCTTestSelection.h>
 
 #import "XCTestFoundationCompat.h"
 #import "XCTestInternal.h"
@@ -19,6 +20,10 @@
 @implementation XCTestSuite {
     NSMutableArray<XCTest *> *_tests;
     NSString *_name;
+    // The identifier of the selection this suite stands for, when it was built
+    // from one. Unassigned until the construction initializer is ported; see
+    // -_xctTestIdentifier.
+    XCTTestIdentifier *_identifier;
 }
 
 #pragma mark - Creation
@@ -84,6 +89,106 @@
 - (Class)testRunClass
 {
     return [XCTestSuiteRun class];
+}
+
+#pragma mark - Ordering
+
+- (NSComparisonResult)defaultExecutionOrderCompare:(XCTest *)other
+{
+    // A suite only knows how to rank another suite, and it sorts after
+    // everything else, matching the case's rule that a case sorts before
+    // everything else. Between two suites the name decides, case-sensitively:
+    // a suite's name is the class or selection it was built from, so a plain
+    // -compare: is the most predictable order for it.
+    if (![other isKindOfClass:[XCTestSuite class]]) {
+        return NSOrderedDescending;
+    }
+    return [self.name compare:((XCTestSuite *)other).name];
+}
+
+- (XCTTestIdentifier *)_xctTestIdentifier
+{
+    // Stored rather than derived: a suite's identifier names the selection it
+    // stands for, which only its construction knows, so there is nothing here
+    // to rebuild from the name. It stays nil until that initializer is ported,
+    // and nil is a useful answer: the removal loops treat "not in the set" as
+    // "keep", so a suite is never dropped by a child's identifier.
+    return _identifier;
+}
+
+- (void)_sortTestsUsingDefaultExecutionOrdering
+{
+    // Sort the mutable storage in place, then descend. A child that is itself a
+    // suite must be ordered before it runs but after it has been sorted, so the
+    // recursion is over the now-sorted children, not over the pre-sort list.
+    [_tests sortUsingSelector:@selector(defaultExecutionOrderCompare:)];
+    for (XCTest *test in self.tests) {
+        if ([test isKindOfClass:[XCTestSuite class]]) {
+            [(XCTestSuite *)test _sortTestsUsingDefaultExecutionOrdering];
+        }
+    }
+}
+
+- (void)_applyRandomExecutionOrderingWithGenerator:(XCTRandomNumberGenerator)generator
+{
+    // One generator threaded through the whole tree, so a seeded run is
+    // reproducible from the seed alone; shuffling each suite with a fresh
+    // generator would still be random but no longer repeatable.
+    [_tests xct_shuffleWithRandomNumberGenerator:generator];
+    for (XCTest *test in self.tests) {
+        if ([test isKindOfClass:[XCTestSuite class]]) {
+            [(XCTestSuite *)test _applyRandomExecutionOrderingWithGenerator:generator];
+        }
+    }
+}
+
+#pragma mark - Removal
+
+- (void)removeTestsWithIdentifierInSet:(XCTTestIdentifierSet *)set
+{
+    // A parameterized test's identifier carries its argument, but the selection
+    // asks to remove the test by its unparameterized parent. Map each argument-
+    // bearing identifier to its parent first so removing one case removes its
+    // siblings too; an identifier with no arguments already is its own parent.
+    XCTTestIdentifierSet *mapped = [set setByApplyingBlock:^id _Nullable(XCTTestIdentifier *identifier) {
+        if (identifier.argumentIDs.count != 0) {
+            return identifier.parentIdentifier;
+        }
+        return identifier;
+    }];
+    [self _removeTestsWithIdentifierInSet:mapped];
+}
+
+- (void)_removeTestsWithIdentifierInSet:(XCTTestIdentifierSet *)set
+{
+    // An empty set matches nothing, so the pass would be a no-op; skipping it
+    // also keeps this from recursing into every suite of a large tree for
+    // nothing.
+    if (set.count == 0) {
+        return;
+    }
+    // Drop this suite's direct children that are in the set, then descend so a
+    // nested suite's own children are filtered by the same set. The recursion
+    // is over the survivors, so an already-removed child is not revisited.
+    [_tests xct_removeObjectsPassingTest:^BOOL(XCTest *test) {
+        return [set containsTestIdentifier:[test _xctTestIdentifier]];
+    }];
+    for (XCTest *test in self.tests) {
+        [test _removeTestsWithIdentifierInSet:set];
+    }
+}
+
+- (void)_removeTestsWithoutIdentifierInSet:(XCTTestIdentifierSet *)set
+{
+    // The complement: keep only what is in the set, and descend the same way.
+    // There is no empty-set guard because an empty set here removes everything,
+    // which is a meaningful request rather than a no-op.
+    [_tests xct_removeObjectsPassingTest:^BOOL(XCTest *test) {
+        return ![set containsTestIdentifier:[test _xctTestIdentifier]];
+    }];
+    for (XCTest *test in self.tests) {
+        [test _removeTestsWithoutIdentifierInSet:set];
+    }
 }
 
 #pragma mark - Execution

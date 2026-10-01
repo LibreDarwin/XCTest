@@ -270,6 +270,42 @@ static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selec
     }
 }
 
+#pragma mark - Ordering
+
+- (NSComparisonResult)defaultExecutionOrderCompare:(XCTest *)other
+{
+    // A case only knows how to rank another case. Anything else -- a suite, or
+    // an object that is not a test -- sorts ahead of it, which keeps a mixed
+    // container's cases together and its suites out of their way. Asked the
+    // other direction, the suite ranks itself after the case, so the two agree.
+    if (![other isKindOfClass:[XCTestCase class]]) {
+        return NSOrderedAscending;
+    }
+    XCTestCase *otherCase = (XCTestCase *)other;
+    if ([[self class] shouldSortTestsBySelector]) {
+        // Hand-built cases may have no identifier yet, but they always have a
+        // selector, so this path orders by the method name spelled as written
+        // rather than by the identifier the rest of the machinery uses.
+        return [NSStringFromSelector(self.invocation.selector)
+                   caseInsensitiveCompare:NSStringFromSelector(otherCase.invocation.selector)];
+    }
+    // The method name is the last component of an identifier; the class is the
+    // rest, and every case in one container shares it, so comparing it would be
+    // constant work. Case-insensitive for the same reason as the suite's name
+    // comparison: ordering should not turn on capitalization.
+    return [self._xctTestIdentifier.lastComponent
+               caseInsensitiveCompare:otherCase._xctTestIdentifier.lastComponent];
+}
+
++ (BOOL)shouldSortTestsBySelector
+{
+    // NO in the shipping framework: discovered cases always have identifiers and
+    // those are the more stable key. The hook exists so a container
+    // constructed by hand, whose cases were never given identifiers, can still
+    // be given a deterministic order; no in-tree class returns YES.
+    return NO;
+}
+
 - (NSUInteger)testCaseCount
 {
     return 1;

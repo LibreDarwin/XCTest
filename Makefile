@@ -597,6 +597,16 @@ check-class-discovery: $(XCTEST_FW_STAMP)
 check-identifier-name: $(XCTEST_FW_STAMP)
 	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-identifier-name.sh
 
+# Ordering and removal decide which of two tests runs first and whether a test
+# runs at all, so they are checked as decisions rather than as methods: a case
+# orders by a case-insensitive method name, a suite by name and after every
+# case, and a selection prunes by identifier with the empty-set asymmetry that
+# an empty "in set" removes nothing while an empty "without set" removes
+# everything. The shuffle is pinned against a fixed generator, because the
+# failure that matters is a different Fisher-Yates variant, which still shuffles.
+check-ordering: $(XCTEST_FW_STAMP)
+	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-ordering.sh
+
 # The implementation has to compile on its own terms, and every function the headers
 # export has to exist, or a caller only reaches it by luck. check-headers and
 # check-macros prove the declarations are well-formed; this proves the definitions
@@ -607,7 +617,7 @@ check-identifier-name: $(XCTEST_FW_STAMP)
 check-sources:
 	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-sources
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-ordering check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd and src/xctestcore/.clangd are already usable,
@@ -672,7 +682,8 @@ check-xcode:
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-loader.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-run-session.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-class-discovery.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-identifier-name.sh
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-identifier-name.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-ordering.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -691,4 +702,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-sources test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-ordering check-sources test clangd-config check-xcode install clean

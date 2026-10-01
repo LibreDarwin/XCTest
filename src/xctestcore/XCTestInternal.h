@@ -48,6 +48,40 @@ XCT_EXPORT NSString *_XCTClassNameWithoutModuleFromClass(Class cls);
 @class XCTExpectedFailure;
 @class XCTExpectedFailureOptions;
 @class XCTTestIdentifier;
+@class XCTTestIdentifierSet;
+
+/// A source of arbitrary unsigned numbers, supplied by the runner so a run can
+/// be made reproducible from a seed. A block rather than an object because the
+/// only thing the shuffle loop needs is "the next number" and the reference
+/// spells it as one too; the default generator is `arc4random`.
+typedef NSUInteger (^XCTRandomNumberGenerator)(void);
+
+/// The mutable-array primitives the ordering machinery is built from. Private
+/// because they are not a general array API -- each one exists for exactly one
+/// caller in XCTestSuite -- and putting them on the public NSMutableArray would
+/// be a contract Apple does not have.
+@interface NSMutableArray<ObjectType> (XCTestAdditions)
+
+/// Shuffles in place with a default generator. A Fisher-Yates walk from the
+/// front, which the reference implements as the generator form below and this
+/// forwards to, so there is one shuffle and not two.
+- (void)xct_shuffle;
+
+/// Shuffles in place by Fisher-Yates, drawing `j` from `[i, count)` for each
+/// `i` from 0. `generator` is invoked once per position, including the last,
+/// where `count - i` is 1 and the draw is necessarily a no-op.
+- (void)xct_shuffleWithRandomNumberGenerator:(XCTRandomNumberGenerator)generator;
+
+/// Removes every element for which `test` answers YES, keeping the elements it
+/// answers NO for in their original relative order.
+- (void)xct_removeObjectsPassingTest:(BOOL (^)(ObjectType object))test;
+
+/// Gathers every element for which `block` answers NO at the front, keeps those
+/// in their relative order, and returns how many there are. The elements that
+/// answer YES end up after that boundary and are otherwise unordered.
+- (NSUInteger)xct_halfStablePartitionUsingBlock:(BOOL (^)(ObjectType object))block;
+
+@end
 
 /// The exception name used for the internal unwind exceptions. Matches what the
 /// shipping implementation uses, so a debugger or a crash reporter that
@@ -258,6 +292,12 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// so the report never prints an empty subject.
 @property (nonatomic, readonly) NSString *_methodNameForReporting;
 
+/// The identifier the selection machinery addresses this object by. Declared on
+/// the base so a suite can ask the same question of every child in one pass --
+/// the removal loops call it on each test without knowing whether the child is a
+/// case or a suite. The base does not answer it; XCTestCase and XCTestSuite do.
+- (nullable XCTTestIdentifier *)_xctTestIdentifier;
+
 @end
 
 /// Adopted by a test class that wants to report a name other than the one its
@@ -314,6 +354,62 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// The cached identifier. Private: the identifier is an internal name, and the
 /// public face of a test is its -name.
 - (XCTTestIdentifier *)_xctTestIdentifier;
+
+@end
+
+/// Execution ordering: the sequence in which a container performs its tests.
+///
+/// A run is ordered one of two ways, never both. Left alone, tests sort by
+/// -defaultExecutionOrderCompare:, which is stable and comparable across
+/// processes so a failure can be reproduced; asked to randomize, the same list
+/// is shuffled instead, and the ordering methods are what the runner reaches
+/// for. Private because neither is a contract a client may rely on -- order is
+/// the runner's business, and -defaultExecutionOrderCompare: only exists so
+/// -sortUsingSelector: has a receiver method.
+@interface XCTest (XCTInternalOrdering)
+
+/// Orders two tests of the same container. The base answers NSOrderedSame -- an
+/// object that is not a test has no natural place among tests -- and each
+/// container subclass answers for its own kind. The comparisons are deliberately
+/// not case-sensitive: a report's ordering should not turn on capitalization.
+- (NSComparisonResult)defaultExecutionOrderCompare:(XCTest *)other;
+
+/// Drops every test whose identifier is in `set`, and recurses into suites so a
+/// nested suite is filtered by the same set. The base is a no-op, because a
+/// single test has no children and is itself removed by its parent.
+- (void)_removeTestsWithIdentifierInSet:(XCTTestIdentifierSet *)set;
+
+/// The complement of the above: keeps only tests whose identifier is in `set`.
+- (void)_removeTestsWithoutIdentifierInSet:(XCTTestIdentifierSet *)set;
+
+@end
+
+@interface XCTestCase (XCTInternalOrdering)
+
+/// Whether this class should be ordered by its selector rather than by its
+/// identifier. NO everywhere in the shipping framework; it exists because a
+/// suite whose cases were built by hand, rather than discovered, may not have
+/// identifiers yet and still needs a meaningful order.
++ (BOOL)shouldSortTestsBySelector;
+
+@end
+
+@interface XCTestSuite (XCTInternalOrdering)
+
+/// Maps each identifier to the identifier of the selection it belongs to -- a
+/// parameterized test to its parent -- and removes that mapped set, so asking to
+/// remove `func(x: 1)` also removes its siblings. The public-ish spelling; the
+/// runner's only entry point.
+- (void)removeTestsWithIdentifierInSet:(XCTTestIdentifierSet *)set;
+
+/// Sorts this suite's tests by -defaultExecutionOrderCompare:, then does the
+/// same for every child suite.
+- (void)_sortTestsUsingDefaultExecutionOrdering;
+
+/// Shuffles this suite's tests with `generator`, then does the same for every
+/// child suite. One generator is threaded through the whole tree so a seeded run
+/// is reproducible from the seed alone.
+- (void)_applyRandomExecutionOrderingWithGenerator:(XCTRandomNumberGenerator)generator;
 
 @end
 

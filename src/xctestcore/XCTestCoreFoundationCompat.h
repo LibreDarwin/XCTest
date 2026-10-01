@@ -114,6 +114,10 @@ FOUNDATION_EXPORT NSString * const NSURLContentModificationDateKey;
 @interface NSArray<ObjectType> (XCTCoreSDKCompat)
 - (NSString *)componentsJoinedByString:(NSString *)separator;
 - (nullable ObjectType)firstObject;
+/// A contiguous slice of the array. An identifier's parent is every component
+/// but the last, which this expresses directly and without a second copy of the
+/// component list.
+- (NSArray<ObjectType> *)subarrayWithRange:(NSRange)range;
 @end
 
 // Archive introspection. A decoded configuration has to distinguish "this key
