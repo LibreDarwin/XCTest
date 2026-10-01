@@ -101,9 +101,10 @@ TARGET = "1A2B3C4E00000000000000B3"
 # Every implementation file in the port. XCTestConfiguration.m and
 # XCTTestSelection.m keep the identifiers minted when this target was first
 # added; the 17 that arrived with the move take refs 0x100-0x110 and build files
-# 0x120-0x130, clear of the ranges already in use. The order is the Makefile's
-# link order, so the two build systems list the same objects in the same sequence
-# and a reviewer can diff the two lists line for line.
+# 0x120-0x130, clear of the ranges already in use, and the enumeration value
+# types added after the move take 0x111/0x131 above them. The order is the
+# Makefile's link order, so the two build systems list the same objects in the
+# same sequence and a reviewer can diff the two lists line for line.
 SOURCES = [
     ("XCTestConfiguration.m", "1A2B3C4E0000000000000075", "1A2B3C4E0000000000000081"),
     ("XCTTestSelection.m", "1A2B3C4E0000000000000076", "1A2B3C4E0000000000000082"),
@@ -124,13 +125,14 @@ SOURCES = [
     ("XCTDarwinNotificationExpectation.m", "1A2B3C4E000000000000010E", "1A2B3C4E000000000000012E"),
     ("XCTExpectedFailure.m", "1A2B3C4E000000000000010F", "1A2B3C4E000000000000012F"),
     ("XCTestConfigurationLoader.m", "1A2B3C4E0000000000000110", "1A2B3C4E0000000000000130"),
+    ("XCTTestRunSession.m", "1A2B3C4E0000000000000111", "1A2B3C4E0000000000000131"),
 ]
 
 # The loader's header is here because the Makefile installs it and the project is
 # held to the Makefile's install set; it was missing from the project until this
 # regeneration, so a header count check against the Makefile would have caught it.
 #
-# All four are Public: this is a private framework, so "public" here means
+# All five are Public: this is a private framework, so "public" here means
 # reachable from inside the module rather than from outside it. The order is the
 # one the generated project lists them in -- value headers, then the umbrella
 # that imports them. Header install order carries no meaning to a compiler, so
@@ -139,18 +141,21 @@ HEADERS = [
     "XCTestConfiguration.h",
     "XCTestConfigurationLoader.h",
     "XCTTestSelection.h",
+    "XCTTestRunSession.h",
     "XCTestCore.h",
 ]
 header_refs = [
     "1A2B3C4E00000000000000C0",
     "1A2B3C4E00000000000000C1",
     "1A2B3C4E00000000000000C2",
+    "1A2B3C4E00000000000000C4",
     "1A2B3C4E00000000000000C3",
 ]
 header_buildfiles = [
     "1A2B3C4E00000000000000E0",
     "1A2B3C4E00000000000000E1",
     "1A2B3C4E00000000000000E2",
+    "1A2B3C4E00000000000000E4",
     "1A2B3C4E00000000000000E3",
 ]
 

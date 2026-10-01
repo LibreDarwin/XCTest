@@ -189,7 +189,8 @@ XCTESTCORE_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTestCore.framework/
 # client that needs one is a client we cannot support the same way twice.
 XCTESTCORE_API_HDRS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h \
 	src/xctestcore/include/XCTestCore/XCTestConfigurationLoader.h \
-	src/xctestcore/include/XCTestCore/XCTTestSelection.h
+	src/xctestcore/include/XCTestCore/XCTTestSelection.h \
+	src/xctestcore/include/XCTestCore/XCTTestRunSession.h
 XCTESTCORE_FW_HEADERS := $(XCTESTCORE_API_HDRS) src/xctestcore/include/XCTestCore/XCTestCore.h
 XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h \
 	src/xctestcore/XCTestAssertionFormats.h \
@@ -214,7 +215,8 @@ XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTest.o $(XCTESTCORE_OBJDIR)/XCTestS
 	$(XCTESTCORE_OBJDIR)/XCTExpectedFailure.o \
 	$(XCTESTCORE_OBJDIR)/XCTestConfiguration.o \
 	$(XCTESTCORE_OBJDIR)/XCTestConfigurationLoader.o \
-	$(XCTESTCORE_OBJDIR)/XCTTestSelection.o
+	$(XCTESTCORE_OBJDIR)/XCTTestSelection.o \
+	$(XCTESTCORE_OBJDIR)/XCTTestRunSession.o
 
 XCCOV        := $(BUILD_DIR)/xccov
 XCCOV_OBJS   := $(OBJDIR)/xcresult.o $(OBJDIR)/bkeyed.o $(OBJDIR)/xccov.o
@@ -389,6 +391,14 @@ $(XCTESTCORE_OBJDIR)/XCTestConfigurationLoader.o: src/xctestcore/XCTestConfigura
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestConfigurationLoader.m
 
+# Depends on the API headers for the same reason as the other two value units,
+# and not on $(XCTESTCORE_FW_HEADERS): this one imports the selection header
+# directly rather than the umbrella, so naming the umbrella would claim it
+# changes when a comment elsewhere does.
+$(XCTESTCORE_OBJDIR)/XCTTestRunSession.o: src/xctestcore/XCTTestRunSession.m $(XCTESTCORE_API_HDRS) $(XCTESTCORE_PRIV_HDRS)
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTTestRunSession.m
+
 $(XCCOV): $(XCCOV_OBJS) $(LIBZSTD)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $(XCCOV_OBJS) $(LIBZSTD) $(FW)
@@ -558,6 +568,15 @@ check-builder: $(XCTESTCORE_FW_STAMP)
 check-loader: $(XCTESTCORE_FW_STAMP)
 	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-loader.sh
 
+# The enumeration value types, whose interesting behaviour is entirely in their
+# archives and their one string. Two of the checks here exist because the
+# reference does something that a round trip cannot observe and a reviewer would
+# otherwise read as a bug: -initWithCoder: rejects an all-false options archive,
+# and -description leaves its parenthesis unclosed. Both are asserted against
+# exact strings.
+check-run-session: $(XCTESTCORE_FW_STAMP)
+	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-run-session.sh
+
 # The implementation has to compile on its own terms, and every function the headers
 # export has to exist, or a caller only reaches it by luck. check-headers and
 # check-macros prove the declarations are well-formed; this proves the definitions
@@ -568,7 +587,7 @@ check-loader: $(XCTESTCORE_FW_STAMP)
 check-sources:
 	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-sources
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd and src/xctestcore/.clangd are already usable,
@@ -630,7 +649,8 @@ check-xcode:
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-configuration.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-selection.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-builder.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-loader.sh
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-loader.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-run-session.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -649,4 +669,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-sources test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-sources test clangd-config check-xcode install clean

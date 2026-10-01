@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000075 /* XCTestConfiguration.m */; };
 		1A2B3C4E0000000000000082 /* XCTTestSelection.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000076 /* XCTTestSelection.m */; };
+		1A2B3C4E0000000000000131 /* XCTTestRunSession.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000111 /* XCTTestRunSession.m */; };
 		1A2B3C4E0000000000000120 /* XCTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000100 /* XCTest.m */; };
 		1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000101 /* XCTestSuite.m */; };
 		1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000102 /* XCTestCase.m */; };
@@ -29,6 +30,7 @@
 		1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000E1 /* XCTestConfigurationLoader.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C1 /* XCTestConfigurationLoader.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000E2 /* XCTTestSelection.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C2 /* XCTTestSelection.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000E4 /* XCTTestRunSession.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C4 /* XCTTestRunSession.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000E3 /* XCTestCore.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C3 /* XCTestCore.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000F2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D0000000000000093 /* Foundation.framework */; };
 		1A2B3C4E00000000000000F3 /* XCTestCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000090 /* XCTestCore.framework */; };
@@ -94,6 +96,7 @@
 		1A2B3C4E0000000000000092 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000075 /* XCTestConfiguration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestConfiguration.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000076 /* XCTTestSelection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTTestSelection.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000111 /* XCTTestRunSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTTestRunSession.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000100 /* XCTest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTest.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000101 /* XCTestSuite.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSuite.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000102 /* XCTestCase.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestCase.m; sourceTree = "<group>"; };
@@ -114,6 +117,7 @@
 		1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestConfiguration.h; sourceTree = "<group>"; };
 		1A2B3C4E00000000000000C1 /* XCTestConfigurationLoader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestConfigurationLoader.h; sourceTree = "<group>"; };
 		1A2B3C4E00000000000000C2 /* XCTTestSelection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTTestSelection.h; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C4 /* XCTTestRunSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTTestRunSession.h; sourceTree = "<group>"; };
 		1A2B3C4E00000000000000C3 /* XCTestCore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTestCore.h; sourceTree = "<group>"; };
 		1A2B3C4D0000000000000090 /* XCTest.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = XCTest.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D0000000000000091 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.module-map; path = module.modulemap; sourceTree = "<group>"; };
@@ -207,6 +211,7 @@
 				1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */,
 				1A2B3C4E00000000000000E1 /* XCTestConfigurationLoader.h in Headers */,
 				1A2B3C4E00000000000000E2 /* XCTTestSelection.h in Headers */,
+				1A2B3C4E00000000000000E4 /* XCTTestRunSession.h in Headers */,
 				1A2B3C4E00000000000000E3 /* XCTestCore.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -297,6 +302,7 @@
 			children = (
 				1A2B3C4E0000000000000075 /* XCTestConfiguration.m */,
 				1A2B3C4E0000000000000076 /* XCTTestSelection.m */,
+				1A2B3C4E0000000000000111 /* XCTTestRunSession.m */,
 				1A2B3C4E0000000000000100 /* XCTest.m */,
 				1A2B3C4E0000000000000101 /* XCTestSuite.m */,
 				1A2B3C4E0000000000000102 /* XCTestCase.m */,
@@ -335,6 +341,7 @@
 				1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */,
 				1A2B3C4E00000000000000C1 /* XCTestConfigurationLoader.h */,
 				1A2B3C4E00000000000000C2 /* XCTTestSelection.h */,
+				1A2B3C4E00000000000000C4 /* XCTTestRunSession.h */,
 				1A2B3C4E00000000000000C3 /* XCTestCore.h */,
 			);
 			path = XCTestCore;
@@ -691,6 +698,7 @@
 			files = (
 				1A2B3C4E0000000000000081 /* XCTestConfiguration.m in Sources */,
 				1A2B3C4E0000000000000082 /* XCTTestSelection.m in Sources */,
+				1A2B3C4E0000000000000131 /* XCTTestRunSession.m in Sources */,
 				1A2B3C4E0000000000000120 /* XCTest.m in Sources */,
 				1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */,
 				1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */,
