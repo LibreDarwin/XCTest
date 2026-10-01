@@ -473,6 +473,99 @@
     return invocations;
 }
 
+#pragma mark - Runtime utilities
+
+/// Sorts a set of classes by class name, with the Swift module stripped, so a
+/// run is reproducible across processes -- where the runtime's class-list order
+/// is not. Sorting by the name a user would write is what the reference does;
+/// a name that fails to sort the same way would change the run order.
+static NSArray *_XCTSortedClassList(NSSet *classes)
+{
+    return [[classes allObjects] sortedArrayUsingComparator:^NSComparisonResult(id left, id right) {
+        NSString *leftName = _XCTClassNameWithoutModuleFromClass((Class)left);
+        NSString *rightName = _XCTClassNameWithoutModuleFromClass((Class)right);
+        return [leftName compare:rightName];
+    }];
+}
+
+/// Every discoverable subclass, as a set.
+///
+/// The runtime can grow its class list while it is being copied -- realizing a
+/// class can register another -- so the copy is retried until the population
+/// stops changing. The reference does the same, for the same reason: a class
+/// missed on an unstable pass is a test that silently never runs.
++ (NSSet *)_allSubclasses
+{
+    unsigned int count = 0;
+    Class *classes = objc_copyClassList(&count);
+    if (classes == NULL) {
+        return [NSSet set];
+    }
+
+    NSMutableSet *discovered = [NSMutableSet set];
+    for (;;) {
+        for (unsigned int i = 0; i < count; i++) {
+            Class candidate = classes[i];
+            if (candidate == self) {
+                continue;
+            }
+            // Walk to the receiver to decide membership, so a class that merely
+            // resembles a subclass is not mistaken for one.
+            Class superclass = class_getSuperclass(candidate);
+            while (superclass != Nil && superclass != self) {
+                superclass = class_getSuperclass(superclass);
+            }
+            if (superclass != self) {
+                continue;
+            }
+            if ([candidate _isDiscoverable]) {
+                [discovered addObject:candidate];
+            }
+        }
+        free(classes);
+
+        unsigned int newCount = 0;
+        Class *newClasses = objc_copyClassList(&newCount);
+        if (newCount == count || newClasses == NULL) {
+            free(newClasses);
+            break;
+        }
+        classes = newClasses;
+        count = newCount;
+    }
+    return [discovered copy];
+}
+
++ (NSArray *)allSubclasses
+{
+    return _XCTSortedClassList([self _allSubclasses]);
+}
+
++ (NSSet *)allSubclassesOutsideXCTest
+{
+    NSString *xctestBundlePath = [[NSBundle bundleForClass:[XCTestCase class]] bundlePath];
+    return [[self _allSubclasses] objectsPassingTest:^BOOL(id candidate, BOOL *stop) {
+        (void)stop;
+        NSString *candidateBundlePath = [[NSBundle bundleForClass:(Class)candidate] bundlePath];
+        return ![candidateBundlePath isEqualToString:xctestBundlePath];
+    }];
+}
+
++ (BOOL)_isDiscoverable
+{
+    NSString *className = NSStringFromClass(self);
+    if ([className hasPrefix:@"NSKVONotifying_"]) {
+        return NO;
+    }
+    // A Swift generic class cannot be instantiated by name, so it is not a test
+    // case. The name prefix alone is not enough: an Objective-C class is free to
+    // be called `_TtGC...`, and _class_isSwift is what tells the two apart.
+    if (_class_isSwift(self) && [className hasPrefix:@"_TtGC"]) {
+        return NO;
+    }
+    return YES;
+}
+
 #pragma mark - Suite extensions
 
 + (XCTestSuite *)defaultTestSuite

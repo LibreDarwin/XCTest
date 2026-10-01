@@ -131,6 +131,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)removeObjectIdenticalTo:(ObjectType)object;
 @end
 
+// Set filtering the reduced NSSet.h omits. A probe confirms the runtime
+// implements it. Class discovery is the caller: it drops the framework's own
+// test-case subclasses from a discovered set by image path.
+@interface NSSet<ObjectType> (XCTSDKCompat)
+- (NSSet<ObjectType> *)objectsPassingTest:(BOOL (^)(ObjectType obj, BOOL *stop))predicate;
+@end
+
 // Path decomposition, used to name a test case after its file and to walk a
 // bundle path. Upstream semantics, including the empty-string results for a
 // bare "/" or a trailing slash.

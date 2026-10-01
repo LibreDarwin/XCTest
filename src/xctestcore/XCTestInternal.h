@@ -16,6 +16,7 @@
 // so declare them here rather than dropping backtraces from the framework.
 // dlfcn.h is present in the SDK and is what supplies Dl_info/dladdr.
 #include <dlfcn.h>
+#include <stdbool.h>
 
 // Annotated explicitly rather than relying on an assume_nonnull region: these
 // sit outside one, and -Wnullability-completeness is enabled.
@@ -23,6 +24,25 @@ extern int backtrace(void *_Nonnull *_Nonnull buffer, int size);
 extern char *_Nonnull *_Nullable backtrace_symbols(void *_Nonnull const *_Nonnull buffer, int size);
 
 NS_ASSUME_NONNULL_BEGIN
+
+// A private libobjc predicate: YES when a class is defined in Swift. It is not
+// in the SDK's <objc/runtime.h>, but libobjc exports it (verified against
+// libobjc.tbd), and it is the only way to tell a Swift class from an
+// Objective-C one whose name merely looks like one -- which is exactly the
+// decision class discovery has to make about the `_TtGC...` names the Swift
+// runtime gives generic classes.
+XCT_EXPORT bool _class_isSwift(Class cls);
+
+// The class name with its Swift module stripped: `MyTests.MyTestsCase` becomes
+// `MyTestsCase`, and a name with no dot is returned unchanged. Only the first
+// component goes, because only the first is the module: a type nested inside
+// another type still needs its outer type spelled to be found.
+//
+// A pair of C functions rather than a category on NSString because the two
+// callers share nothing else: selection builds an identifier from a string
+// name, and class discovery orders classes by theirs.
+XCT_EXPORT NSString *_XCTClassNameWithoutModuleFromClassName(NSString *className);
+XCT_EXPORT NSString *_XCTClassNameWithoutModuleFromClass(Class cls);
 
 @class XCTIssue;
 @class XCTExpectedFailure;
@@ -180,6 +200,31 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// takes; the setter is private for the same reason as XCTestRun's above.
 @interface XCTest (XCTInternal)
 @property (readwrite, strong, nullable) XCTestRun *testRun;
+@end
+
+/// Class discovery: which classes in this process are test cases.
+///
+/// Private, and deliberately not on the public XCTestCase header. A client has
+/// no business enumerating every XCTestCase subclass in the process; the runner
+/// is the only caller, and it uses this to build a test tree from the classes a
+/// test bundle has already loaded.
+@interface XCTestCase (XCTRuntimeUtilities)
+
+/// Every discoverable subclass of the receiver, ordered by class name with the
+/// Swift module stripped. The order is what makes a run reproducible across
+/// processes, where the runtime's class list is not.
++ (NSArray *)allSubclasses;
+
+/// Every discoverable subclass whose image is not the one XCTestCase itself
+/// lives in. The framework's own test-case subclasses are machinery, not tests,
+/// and this is the filter that keeps them out of a run.
++ (NSSet *)allSubclassesOutsideXCTest;
+
+/// Whether the receiver may be treated as a test class at all. NO for the
+/// subclasses the runtime synthesises for key-value observing, and for Swift
+/// generic classes, which cannot be instantiated by name.
++ (BOOL)_isDiscoverable;
+
 @end
 
 NS_ASSUME_NONNULL_END

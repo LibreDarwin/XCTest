@@ -47,4 +47,29 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
     [testCase recordIssue:issue];
 }
 
+#pragma mark - Class name helpers
+
+/// Strips the module from a Swift class name: `MyTests.MyTestsCase` becomes
+/// `MyTestsCase`, and a name with no dot is returned unchanged. Only the first
+/// component goes, because only the first is the module: a type nested in
+/// another type still needs its outer type spelled to be found.
+NSString *_XCTClassNameWithoutModuleFromClassName(NSString *className)
+{
+    NSRange moduleSeparator = [className rangeOfString:@"."];
+    if (moduleSeparator.location == NSNotFound) {
+        return className;
+    }
+    NSUInteger startOfName = moduleSeparator.location + 1;
+    if (className.length <= startOfName) {
+        // A trailing dot names nothing, so there is no name to return.
+        return className;
+    }
+    return [className substringFromIndex:startOfName];
+}
+
+NSString *_XCTClassNameWithoutModuleFromClass(Class cls)
+{
+    return _XCTClassNameWithoutModuleFromClassName(NSStringFromClass(cls));
+}
+
 NS_ASSUME_NONNULL_END
