@@ -588,6 +588,15 @@ check-run-session: $(XCTESTCORE_FW_STAMP)
 check-class-discovery: $(XCTEST_FW_STAMP)
 	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-class-discovery.sh
 
+# A test's name is derived three ways from one selector, and no single check
+# sees all of them: the display name, the language-specific name that keeps the
+# trailing signature suffix, and the identifier the selection machinery
+# addresses. The harness spells one base method three ways and requires them to
+# agree, which is also the check that a rename hook and the identifier cache are
+# honoured rather than re-derived on each call.
+check-identifier-name: $(XCTEST_FW_STAMP)
+	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-identifier-name.sh
+
 # The implementation has to compile on its own terms, and every function the headers
 # export has to exist, or a caller only reaches it by luck. check-headers and
 # check-macros prove the declarations are well-formed; this proves the definitions
@@ -598,7 +607,7 @@ check-class-discovery: $(XCTEST_FW_STAMP)
 check-sources:
 	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-sources
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd and src/xctestcore/.clangd are already usable,
@@ -662,7 +671,8 @@ check-xcode:
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-builder.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-loader.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-run-session.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-class-discovery.sh
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-class-discovery.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-identifier-name.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -681,4 +691,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-sources test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-sources test clangd-config check-xcode install clean

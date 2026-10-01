@@ -36,6 +36,35 @@
     return _name ?: NSStringFromClass([self class]);
 }
 
+- (NSString *)nameForLegacyLogging
+{
+    // The base has no class-and-method spelling of its own to offer, so a
+    // subclass that does not name itself here falls back to -name.
+    return self.name;
+}
+
+- (NSString *)languageAgnosticTestClassName
+{
+    return _XCTClassNameWithoutModuleFromClass([self class]);
+}
+
+- (nullable NSString *)languageAgnosticTestMethodName
+{
+    // A suite has no single method; only a case overrides this.
+    return nil;
+}
+
+- (NSString *)_methodNameForReporting
+{
+    // A single test reports the method it runs, with the harness suffixes
+    // stripped. A suite that reaches here has no method, so it names itself
+    // instead, which keeps the report from printing an empty subject.
+    if ([self isKindOfClass:[XCTestCase class]] && ((XCTestCase *)self).invocation.selector != NULL) {
+        return [self languageAgnosticTestMethodName] ?: @"";
+    }
+    return [NSString stringWithFormat:@"unspecifiedMethod_%@", self.name];
+}
+
 - (Class)testRunClass
 {
     // Abstract: nil until a subclass names the run type it produces.

@@ -10,6 +10,7 @@
 #import <XCTest/XCTestSkippingImpl.h>
 #import <XCTest/XCTIssue.h>
 #import <XCTest/XCTExpectedFailure.h>
+#import <XCTestCore/XCTTestSelection.h>
 
 #import "XCTestExpectationInternal.h"
 #import "XCTestFoundationCompat.h"
@@ -39,8 +40,26 @@
 @implementation _XCTExpectedFailureScope
 @end
 
+/// The selector name with the trailing suffixes the harness appends to mark a
+/// method as error- or completion-handler-shaped stripped. The name a report
+/// prints is the name the source used: `testFooAndReturnError:` is `testFoo`
+/// with a signature the runner understands, not a different test.
+static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selectorName)
+{
+    static NSString *const errorSuffix = @"AndReturnError:";
+    static NSString *const completionSuffix = @"WithCompletionHandler:";
+    if ([selectorName hasSuffix:errorSuffix]) {
+        selectorName = [selectorName substringToIndex:selectorName.length - errorSuffix.length];
+    }
+    if ([selectorName hasSuffix:completionSuffix]) {
+        selectorName = [selectorName substringToIndex:selectorName.length - completionSuffix.length];
+    }
+    return selectorName;
+}
+
 @implementation XCTestCase {
     NSInvocation *_invocation;
+    XCTTestIdentifier *_identifier;
     NSMutableArray<void (^)(void)> *_teardownBlocks;
     NSMutableArray<void (^)(void (^)(NSError *_Nullable))> *_asyncTeardownBlocks;
     NSMutableArray *_expectedFailureScopes;
@@ -127,11 +146,128 @@
 
 - (NSString *)name
 {
-    SEL selector = _invocation.selector;
-    if (selector == NULL) {
-        return NSStringFromClass([self class]);
+    // The public spelling Apple documents: `-[MyTests testExample]`. The class
+    // name is module-stripped and the method name carries neither the trailing
+    // signature suffix nor, for Swift, a spelled-out argument list.
+    return [NSString stringWithFormat:@"-[%@ %@]",
+                                      self.languageAgnosticTestClassName,
+                                      self.languageAgnosticTestMethodName];
+}
+
+- (NSString *)nameForLegacyLogging
+{
+    // The legacy spelling keeps the module: the class name here is the one the
+    // Objective-C runtime, and so a crash log, uses.
+    return [NSString stringWithFormat:@"-[%@ %@]",
+                                      NSStringFromClass([self class]),
+                                      self.languageAgnosticTestMethodName];
+}
+
+- (NSString *)languageSpecificTestClassName
+{
+    return NSStringFromClass([self class]);
+}
+
+- (NSString *)languageAgnosticTestMethodName
+{
+    // A subclass may rename itself: XCTestCastMethodNamesUIAutomationDelegate
+    // does, so an automation script that calls a differently-named method is
+    // still reported under the name the script uses. The override wins over the
+    // invocation's own selector.
+    id<XCTestMethodNameOverriding> overriding = (id<XCTestMethodNameOverriding>)self;
+    if ([overriding respondsToSelector:@selector(overridesTestMethodName)] &&
+        overriding.overridesTestMethodName) {
+        return overriding.overriddenTestMethodName;
     }
-    return [NSString stringWithUTF8String:sel_getName(selector)];
+    if (self.invocation.selector == NULL) {
+        return nil;
+    }
+    return _XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSStringFromSelector(self.invocation.selector));
+}
+
+- (NSString *)overridden_languageAgnosticTestMethodName
+{
+    // If the class implements -languageAgnosticTestMethodName itself, that is
+    // the name and the rename hooks below do not apply. Compared as an
+    // implementation pointer, not by asking -respondsToSelector:, because every
+    // case responds -- the question is whether this class's answer is its own.
+    if ([self methodForSelector:@selector(languageAgnosticTestMethodName)] !=
+        [XCTestCase instanceMethodForSelector:@selector(languageAgnosticTestMethodName)]) {
+        return self.languageAgnosticTestMethodName;
+    }
+    id<XCTestMethodNameOverriding> overriding = (id<XCTestMethodNameOverriding>)self;
+    if ([overriding respondsToSelector:@selector(overridesTestMethodName)] &&
+        overriding.overridesTestMethodName) {
+        return overriding.overriddenTestMethodName;
+    }
+    return nil;
+}
+
+- (NSString *)languageSpecificTestMethodName
+{
+    SEL selector = self.invocation.selector;
+    if (selector == NULL) {
+        return nil;
+    }
+    return [[self class] _languageSpecificTestMethodNameForSelector:selector];
+}
+
++ (NSString *)_languageSpecificTestMethodNameForSelector:(SEL)selector
+{
+    NSString *name = _XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSStringFromSelector(selector));
+    if (_class_isSwift(self)) {
+        // A Swift test method's spelled-out name carries its argument list --
+        // `testFoo()` -- which the Objective-C selector has already dropped.
+        // Put it back so a name read off a report matches the source.
+        name = [name stringByAppendingString:@"()"];
+    }
+    return name;
+}
+
++ (BOOL)mayBeSwift
+{
+    return _class_isSwift(self);
+}
+
++ (BOOL)customizesTestMethodNameViaOverrides
+{
+    // Two independent questions: does this class answer -name itself, and does
+    // it answer -languageAgnosticTestMethodName itself. Either override means
+    // the cheap selector-derived name would be wrong for it.
+    SEL methodNameSelector = @selector(languageAgnosticTestMethodName);
+    if ([self instanceMethodForSelector:methodNameSelector] !=
+        [XCTestCase instanceMethodForSelector:methodNameSelector]) {
+        return YES;
+    }
+    SEL nameSelector = @selector(name);
+    return [self instanceMethodForSelector:nameSelector] !=
+           [XCTestCase instanceMethodForSelector:nameSelector];
+}
+
+- (XCTTestIdentifier *)_uncachedIdentifierWithClassName:(NSString *)className
+{
+    // First answer wins: an explicit rename, then the selector spelled with its
+    // signature suffix, then the display name, then the reporting fallback,
+    // which is never nil.
+    NSString *methodName =
+        self.overridden_languageAgnosticTestMethodName ?:
+        self.languageSpecificTestMethodName ?:
+        self.languageAgnosticTestMethodName ?:
+        [self _methodNameForReporting];
+    return [[XCTTestIdentifier alloc] initWithClassName:className methodName:methodName];
+}
+
+- (XCTTestIdentifier *)_xctTestIdentifier
+{
+    // A case is asked for its identifier once per test-run session and once per
+    // report line, so it is built once. @synchronized rather than assumed
+    // single-threaded: selection may run concurrently with reporting.
+    @synchronized (self) {
+        if (_identifier == nil) {
+            _identifier = [self _uncachedIdentifierWithClassName:self.languageSpecificTestClassName];
+        }
+        return _identifier;
+    }
 }
 
 - (NSUInteger)testCaseCount

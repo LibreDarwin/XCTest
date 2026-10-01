@@ -47,6 +47,7 @@ XCT_EXPORT NSString *_XCTClassNameWithoutModuleFromClass(Class cls);
 @class XCTIssue;
 @class XCTExpectedFailure;
 @class XCTExpectedFailureOptions;
+@class XCTTestIdentifier;
 
 /// The exception name used for the internal unwind exceptions. Matches what the
 /// shipping implementation uses, so a debugger or a crash reporter that
@@ -224,6 +225,95 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// subclasses the runtime synthesises for key-value observing, and for Swift
 /// generic classes, which cannot be instantiated by name.
 + (BOOL)_isDiscoverable;
+
+@end
+
+/// How a test names itself, and the identifier that names it to the selection
+/// machinery.
+///
+/// Only -name is public. The rest spell out how the name is derived -- which
+/// Swift module to strip, which trailing selector suffixes are signature
+/// plumbing rather than part of the method -- and a client that leaned on any
+/// of them would break the moment the derivation changed. The report writer and
+/// the selection machinery are the only callers.
+@interface XCTest (XCTInternalIdentity)
+
+/// The class name with its Swift module stripped: `MyTests.MyTestsCase` is
+/// displayed as `MyTestsCase`, because the module is noise in a report that is
+/// already scoped to one bundle.
+@property (nonatomic, readonly) NSString *languageAgnosticTestClassName;
+
+/// The test method name, or nil for an object that is not a single method. The
+/// base answers nil; a case derives it from its invocation.
+@property (nonatomic, readonly, nullable) NSString *languageAgnosticTestMethodName;
+
+/// The display name in the form the legacy log parser expects. The base
+/// forwards to -name; a case spells out its class and method with the module
+/// still attached, because that is the spelling the Objective-C runtime, and so
+/// a crash log, uses.
+@property (nonatomic, readonly) NSString *nameForLegacyLogging;
+
+/// The method name alone, for a report that has already named the class. A case
+/// answers with its own method; anything else, including a suite, names itself
+/// so the report never prints an empty subject.
+@property (nonatomic, readonly) NSString *_methodNameForReporting;
+
+@end
+
+/// Adopted by a test class that wants to report a name other than the one its
+/// selector implies -- XCTestCastMethodNamesUIAutomationDelegate is the only
+/// in-tree example. Both selectors are optional and are probed with
+/// -respondsToSelector:, never required.
+@protocol XCTestMethodNameOverriding <NSObject>
+@optional
+/// Whether -overriddenTestMethodName should be consulted.
+- (BOOL)overridesTestMethodName;
+/// The name to report in place of the selector-derived one.
+- (NSString *)overriddenTestMethodName;
+@end
+
+@interface XCTestCase (XCTInternalIdentity)
+
+@property (nonatomic, readonly) NSString *nameForLegacyLogging;
+@property (nonatomic, readonly, nullable) NSString *languageAgnosticTestMethodName;
+
+/// The class name including its Swift module, which is what an identifier
+/// carries: an identifier has to survive a process restart and be matched back
+/// to a class by name, so it cannot drop the part that disambiguates two
+/// same-named classes in different modules.
+@property (nonatomic, readonly) NSString *languageSpecificTestClassName;
+
+/// The method name spelled the way its source language spells it. For
+/// Objective-C this is the same skeleton -languageAgnosticTestMethodName
+/// returns; for Swift it carries the argument-list spelling -- `testFoo()` --
+/// because that is the name the source wrote and a report should read back.
+@property (nonatomic, readonly, nullable) NSString *languageSpecificTestMethodName;
+
+/// The name this class means to report, when it renames itself through the
+/// XCTestMethodNameOverriding hooks. The leading underscore is Apple's; a
+/// subclass is not meant to call it.
+@property (nonatomic, readonly, nullable) NSString *overridden_languageAgnosticTestMethodName;
+
+/// Whether this class is compiled from Swift. The answer decides how a method
+/// name is spelled, not whether the test runs.
++ (BOOL)mayBeSwift;
+
+/// Whether this class overrides a name-related method, which decides whether
+/// the slower name-derivation path is worth taking at all.
++ (BOOL)customizesTestMethodNameViaOverrides;
+
+/// The method name for `selector`, with the harness suffixes stripped and, for
+/// a Swift class, carrying the argument-arity suffix a Swift spelling has.
++ (nullable NSString *)_languageSpecificTestMethodNameForSelector:(SEL)selector;
+
+/// The identifier, built without consulting the cache. Split out because the
+/// cache's initializer runs under @synchronized and must not re-enter the
+/// getter.
+- (XCTTestIdentifier *)_uncachedIdentifierWithClassName:(NSString *)className;
+
+/// The cached identifier. Private: the identifier is an internal name, and the
+/// public face of a test is its -name.
+- (XCTTestIdentifier *)_xctTestIdentifier;
 
 @end
 
