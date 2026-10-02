@@ -799,16 +799,14 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
 
 - (XCTTestIdentifier *)swiftMethodCounterpart
 {
-    if (!self.usesClassAndMethodSemantics || self.componentCount != 2 || !self.isSwiftMethod) {
+    if (!self.usesClassAndMethodSemantics || self.componentCount != 2 || self.isSwiftMethod) {
         // A suite is not a method under another spelling, and a method that is
-        // not already a Swift one has no Swift reading to give.
+        // already read as Swift has no second Swift reading to give.
         return nil;
     }
-    // The same components and the same arguments, read as Swift. For an
-    // identifier that came from -initWithStringRepresentation: that is the
-    // identifier itself, and the copy is the point: the reading is forced here
-    // rather than inherited, so a subclass that reports different option bits
-    // for the same components still gets the Swift reading asked for.
+    // The same components and the same arguments, read as Swift. Only the one
+    // option bit changes, so the identifier names the same test; what differs is
+    // that it now matches the spelling a Swift Testing runner writes.
     return [[XCTTestIdentifier alloc] initWithComponents:self.components
                                              argumentIDs:self.argumentIDs
                                                  options:self.options | XCTTestIdentifierOptionSwiftMethod];

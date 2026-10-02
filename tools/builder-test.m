@@ -176,24 +176,25 @@ int main(void)
 
         fprintf(stdout, "counterparts\n");
         {
+            // The counterpart is the Swift reading of an Objective-C method:
+            // same components, same arguments, only the Swift option bit set.
             XCTTestIdentifier *objc = [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testFoo"];
-            Check(objc.swiftMethodCounterpart == nil, @"an Objective-C method has no Swift counterpart");
+            Check(!objc.isSwiftMethod, @"the fixture is read as an Objective-C method");
+            XCTTestIdentifier *counterpart = objc.swiftMethodCounterpart;
+            Check(counterpart != nil, @"an Objective-C method has a Swift counterpart");
+            Check(counterpart.isSwiftMethod, @"the counterpart carries the Swift reading");
+            Check([counterpart.components isEqualToArray:objc.components],
+                  @"the counterpart names the same test");
         }
         {
             XCTTestIdentifier *suite = [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests"];
             Check(suite.swiftMethodCounterpart == nil, @"a suite has no counterpart");
         }
         {
+            // The reading is already Swift, so there is no second one to add.
             XCTTestIdentifier *swiftTest = [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyModule.MyTests/testFoo()"];
-            XCTTestIdentifier *counterpart = swiftTest.swiftMethodCounterpart;
-            Check(counterpart != nil, @"a Swift method has a counterpart");
-            Check([counterpart.identifierString isEqualToString:@"MyTests/testFoo"],
-                  @"the counterpart is the Objective-C spelling");
-            // The counterpart forces the Swift reading on rather than removing
-            // it, so for an identifier that arrived as Swift it equals the
-            // receiver. The check that matters is that it is never nil here.
-            Check(counterpart.isSwiftMethod, @"the counterpart forces the Swift reading on");
-            Check([counterpart isEqual:swiftTest], @"and so it equals the receiver for a Swift identifier");
+            Check(swiftTest.isSwiftMethod, @"the fixture is read as a Swift method");
+            Check(swiftTest.swiftMethodCounterpart == nil, @"a Swift method has no second Swift reading");
         }
 
         // MARK: Accumulation
@@ -252,18 +253,33 @@ int main(void)
         }
         {
             // The counterpart path, which includingSwiftCounterpart:YES is the
-            // only way to reach.
+            // only way to reach. For an Objective-C method the Swift reading is
+            // added, and it is the same identifier the Swift Testing parser
+            // produces, so the parser's own pass does not add a second copy.
+            XCTTestIdentifier *objc = [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testFoo"];
+            XCTTestIdentifierSetBuilder *without = [[XCTTestIdentifierSetBuilder alloc] init];
+            [without addTestIdentifiersForStringRepresentation:@"MyTests/testFoo"
+                                          includingSwiftCounterpart:NO];
             XCTTestIdentifierSetBuilder *builder = [[XCTTestIdentifierSetBuilder alloc] init];
             [builder addTestIdentifiersForStringRepresentation:@"MyTests/testFoo"
                                          includingSwiftCounterpart:YES];
             fprintf(stdout, "    %s\n", Describe(builder).UTF8String);
-            Check(builder.count == 2,
-                  @"asking for the counterpart adds nothing for a plain method, which has none");
-            NSUInteger afterPlain = builder.count;
-            [builder addTestIdentifiersForStringRepresentation:@"MyModule.MyTests/testFoo()"
-                                         includingSwiftCounterpart:YES];
-            Check(builder.count == afterPlain + 2,
-                  @"a Swift method's counterpart is its own reading, so the string adds two, not three");
+            Check([builder containsTestIdentifier:objc.swiftMethodCounterpart],
+                  @"asking for the counterpart puts the Swift reading in the set");
+            Check(builder.count == without.count + 1,
+                  @"the flag adds exactly the Swift counterpart of the Objective-C method");
+        }
+        {
+            // A Swift method has no counterpart, so asking for one changes
+            // nothing: the readings it parses to are already Swift.
+            XCTTestIdentifierSetBuilder *without = [[XCTTestIdentifierSetBuilder alloc] init];
+            [without addTestIdentifiersForStringRepresentation:@"MyModule.MyTests/testFoo()"
+                                          includingSwiftCounterpart:NO];
+            XCTTestIdentifierSetBuilder *with = [[XCTTestIdentifierSetBuilder alloc] init];
+            [with addTestIdentifiersForStringRepresentation:@"MyModule.MyTests/testFoo()"
+                                       includingSwiftCounterpart:YES];
+            Check(with.count == without.count,
+                  @"a Swift method has no counterpart, so the flag adds nothing");
         }
         {
             XCTTestIdentifierSetBuilder *builder = [[XCTTestIdentifierSetBuilder alloc] init];

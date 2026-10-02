@@ -231,9 +231,9 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 /// method with a parameterized input, and a single component is a suite.
 - (nullable instancetype)initWithSwiftTestingStringRepresentation:(NSString *)stringRepresentation;
 
-/// The same test as the Objective-C runner would name it, or nil when there is
-/// no such distinct spelling: a suite has no counterpart, and a method that is
-/// already an Objective-C one is its own counterpart.
+/// The same test read as Swift Testing would name it, or nil when there is no
+/// such distinct spelling: a suite is not a method, and an Objective-C method
+/// gains the counterpart that carries the Swift reading.
 - (nullable XCTTestIdentifier *)swiftMethodCounterpart;
 
 @end
