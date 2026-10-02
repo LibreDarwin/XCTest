@@ -11,9 +11,18 @@
 
 XCT_HEADER_AUDIT_BEGIN
 
+@class XCTAttachment;
+
 @protocol XCTActivity <NSObject>
-@optional
-- (void)addActivity:(id<XCTActivity>)activity;
+
+/// Human-readable name of the activity, given at creation time.
+@property (readonly, copy) NSString *name;
+
+/// Adds an attachment which is always kept by Xcode, regardless of the test
+/// result. Thread-safe, attachments can be added from any thread, and are
+/// reported in the order they are added.
+- (void)addAttachment:(XCTAttachment *)attachment;
+
 @end
 
 XCT_HEADER_AUDIT_END

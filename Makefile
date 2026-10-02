@@ -189,6 +189,7 @@ XCTESTCORE_FW_LDFLAGS := -dynamiclib -install_name "@rpath/XCTestCore.framework/
 # client that needs one is a client we cannot support the same way twice.
 XCTESTCORE_API_HDRS := src/xctestcore/include/XCTestCore/XCTestConfiguration.h \
 	src/xctestcore/include/XCTestCore/XCTestConfigurationLoader.h \
+	src/xctestcore/include/XCTestCore/XCActivityRecord.h \
 	src/xctestcore/include/XCTestCore/XCTTestSelection.h \
 	src/xctestcore/include/XCTestCore/XCTTestRunSession.h
 XCTESTCORE_FW_HEADERS := $(XCTESTCORE_API_HDRS) src/xctestcore/include/XCTestCore/XCTestCore.h
@@ -205,6 +206,7 @@ XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h \
 XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTest.o $(XCTESTCORE_OBJDIR)/XCTestSuite.o \
 	$(XCTESTCORE_OBJDIR)/XCTestCase.o $(XCTESTCORE_OBJDIR)/XCTestRun.o \
 	$(XCTESTCORE_OBJDIR)/XCTestObservation.o $(XCTESTCORE_OBJDIR)/XCTestAssertions.o \
+	$(XCTESTCORE_OBJDIR)/XCActivityRecord.o \
 	$(XCTESTCORE_OBJDIR)/XCTestInternal.o $(XCTESTCORE_OBJDIR)/XCTestSupportTypes.o \
 	$(XCTESTCORE_OBJDIR)/XCTestMetrics.o \
 	$(XCTESTCORE_OBJDIR)/XCTestExpectation.o $(XCTESTCORE_OBJDIR)/XCTWaiter.o \
@@ -302,6 +304,9 @@ $(XCTESTCORE_OBJDIR)/XCTestObservation.o: src/xctestcore/XCTestObservation.m $(X
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestObservation.m
 
+
+$(XCTESTCORE_OBJDIR)/XCActivityRecord.o: src/xctestcore/XCActivityRecord.m $(XCTEST_FW_HEADERS) src/xctestcore/include/XCTestCore/XCActivityRecord.h
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCActivityRecord.m
 $(XCTESTCORE_OBJDIR)/XCTestAssertions.o: src/xctestcore/XCTestAssertions.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestAssertionFormats.h
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestAssertions.m

@@ -146,6 +146,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// predicate because the partition has already moved the matching elements into
 /// one contiguous run at the tail, leaving that run to drop.
 - (void)removeObjectsInRange:(NSRange)range;
+/// Wholesale replacement of the contents, which is how an activity record
+/// rebuilds its attachment list after filtering rather than mutating the live
+/// collection element by element. A probe confirms the runtime implements it.
+- (void)setArray:(NSArray<ObjectType> *)array;
 @end
 
 // Set filtering the reduced NSSet.h omits. A probe confirms the runtime
@@ -165,6 +169,24 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly, copy) NSString *stringByDeletingPathExtension;
 - (NSString *)stringByAppendingPathComponent:(NSString *)component;
 @end
+
+#pragma mark - Failure reporting
+
+// XCTestCore does NOT reintroduce NSAssertionHandler, though the reduced SDK
+// omits the class and XCTest adds -handleFailureInMethod: to it upstream.
+//
+// The reason is the one recorded at the top of XCTestCoreFoundationCompat.h: a
+// *method* may be redeclared in a category under both SDKs, but a *class* may
+// not -- upstream declares NSAssertionHandler inside NSException.h rather than a
+// header of its own, so no __has_include test can tell the two SDKs apart, and an
+// unguarded @interface is a hard error wherever the full SDK is in use. The
+// reduced SDK additionally declares NSAssertionFailure without exporting the
+// symbol, so going through the handler would compile and then fail to link.
+//
+// XCActivityRecord.m therefore raises the exception itself. NSException,
+// +exceptionWithName:reason:userInfo: and NSInternalInconsistencyException are all
+// declared in that same reduced header, and all three are what the assertion
+// handler would have used to report the same failure.
 
 #pragma mark - Key-value observing
 

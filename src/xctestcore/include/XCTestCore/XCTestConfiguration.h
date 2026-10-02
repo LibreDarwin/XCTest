@@ -43,6 +43,8 @@ NS_ASSUME_NONNULL_BEGIN
 // The reduced Internal SDK's Foundation has no <Foundation/NSUUID.h> at all, so
 // the class itself has to be reintroduced. A full SDK ships the header, and
 // redeclaring a class is a hard error, so the whole block is conditional.
+#ifndef XCTCoreSDKCompat_NSUUID
+#define XCTCoreSDKCompat_NSUUID
 #if !__has_include(<Foundation/NSUUID.h>)
 @interface NSUUID : NSObject <NSCopying, NSSecureCoding>
 + (instancetype)UUID;
@@ -53,6 +55,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly, copy) NSString *UUIDString;
 @end
 #endif /* !__has_include(<Foundation/NSUUID.h>) */
+#endif /* XCTCoreSDKCompat_NSUUID */
 
 /// Whether a run is driving unit tests or UI tests.
 ///

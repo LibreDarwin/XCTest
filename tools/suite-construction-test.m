@@ -28,12 +28,14 @@
 // where these methods would drift if they drifted anywhere.
 #import <XCTest/XCTest.h>
 #import <XCTestCore/XCTTestSelection.h>
+#import <XCTestCore/XCActivityRecord.h>
 
 #import "XCTestInternal.h"
 #import "XCTestFoundationCompat.h"
 #import "XCTestObservationInternal.h"
 
 #import <Foundation/Foundation.h>
+#import <math.h>
 
 #import <stdio.h>
 
@@ -503,6 +505,138 @@ static void testActivityObservation(void)
     }
 }
 
+void testActivityRecord(void)
+{
+    // These are about the recovered semantics rather than about the plumbing: a
+    // record is the identity, timing and attachment store an activity tree is
+    // assembled from, and its defaults are what make a hand-built record in a
+    // test stand in for a real one.
+    XCActivityRecord *record = [[XCActivityRecord alloc] init];
+
+    ok("a new record is valid",
+       record.isValid, nil);
+    ok("a new record has an identifier",
+       record.uuid.UUIDString.length > 0, nil);
+    ok("a new record has no parent",
+       record.parentID == nil, nil);
+    ok("a new record's title is empty, not nil",
+       [record.title isEqualToString:@""], nil);
+    ok("a record's name is its title",
+       [record.name isEqualToString:record.title], nil);
+    ok("a new record has a start but no finish",
+       record.start != nil && record.finish == nil, nil);
+    ok("a new record is not top level",
+       !record.isTopLevel, nil);
+    ok("a new record carries no ancillary context",
+       !record.hasAncillaryContext, nil);
+    ok("a new record aggregates under the reference's default",
+       [record.aggregationIdentifier isEqualToString:@"Other"], nil);
+    ok("a new record does not use the legacy serialization format",
+       !record.useLegacySerializationFormat, nil);
+    ok("a new record has no children yet",
+       record.subactivitiesDuration == 0.0, nil);
+
+    // Parent identity is how the tree is rebuilt: a child names its parent by
+    // UUID rather than holding a reference, so the two must agree.
+    XCActivityRecord *child = [[XCActivityRecord alloc] initWithParentID:record.uuid];
+    ok("a child records its parent's identifier",
+       [child.parentID isEqual:record.uuid], nil);
+    ok("a child gets an identifier of its own",
+       ![child.uuid isEqual:record.uuid], nil);
+    ok("a child starts as valid",
+       child.isValid, nil);
+
+    // Duration is the reference's own definition: the gap between the two
+    // timestamps, both of which are stamped at init. It is not a running clock.
+    record.start = [NSDate dateWithTimeIntervalSince1970:1000.0];
+    record.finish = [NSDate dateWithTimeIntervalSince1970:1002.5];
+    ok("duration is the gap between start and finish",
+       fabs(record.duration - 2.5) < 0.001,
+       [NSString stringWithFormat:@"%.3f", record.duration]);
+
+    // A finish that never got stamped must not read as a negative or absurd
+    // span; the reference guards the subtraction rather than trusting it.
+    record.finish = nil;
+    ok("duration is zero while the finish is unset",
+       record.duration == 0.0,
+       [NSString stringWithFormat:@"%.3f", record.duration]);
+    ok("a brand new record has no duration yet",
+       [[XCActivityRecord alloc] init].duration == 0.0, nil);
+
+    // Children report how long they took, and the parent accumulates it. This is
+    // what the stack forwards through -subactivityCompletedWithDuration:.
+    [record subactivityCompletedWithDuration:1.25];
+    [record subactivityCompletedWithDuration:2.75];
+    ok("child durations accumulate",
+       fabs(record.subactivitiesDuration - 4.0) < 0.001,
+       [NSString stringWithFormat:@"%.3f", record.subactivitiesDuration]);
+
+    // Metadata is read and written by key, and the tree's aggregation fields are
+    // set alongside it, so the surface has to be a mutable dictionary rather than
+    // an immutable one.
+    ok("a new record has no metadata",
+       record.metadata == nil, nil);
+    // Assigning through the property, not subscripting in place: the reference's
+    // init leaves the dictionary absent, so a caller supplies it.
+    record.metadata = [NSMutableDictionary dictionary];
+    record.metadata[@"k"] = @"v";
+    ok("metadata is writable by key",
+       [record.metadata[@"k"] isEqualToString:@"v"], nil);
+    ok("metadata returns what was stored",
+       [record.metadata isEqualToDictionary:@{@"k": @"v"}], nil);
+
+    record.title = @"Suite Set Up";
+    ok("a record's name follows its title",
+       [record.name isEqualToString:@"Suite Set Up"], nil);
+
+    record.activityType = @"com.apple.dt.xctest.activity-type.ui-testing";
+    ok("the activity type is stored",
+       [record.activityType isEqualToString:@"com.apple.dt.xctest.activity-type.ui-testing"], nil);
+
+    // Attachments are ordered, and the read-only view is a snapshot rather than
+    // the live collection: a caller that walks it must not be able to mutate the
+    // record through it.
+    XCTAttachment *first = [XCTAttachment attachmentWithUniformTypeIdentifier:nil];
+    XCTAttachment *second = [XCTAttachment attachmentWithUniformTypeIdentifier:nil];
+    first.name = @"first";
+    second.name = @"second";
+    [record addAttachment:first];
+    [record addAttachment:second];
+
+    ok("attachments keep the order they were added in",
+       record.attachments.count == 2 &&
+       [((XCTAttachment *)[record.attachments objectAtIndex:0]).name isEqualToString:@"first"] &&
+       [((XCTAttachment *)[record.attachments objectAtIndex:1]).name isEqualToString:@"second"], nil);
+    ok("an attachment can be found by name",
+       [record attachmentForName:@"second"] == second, nil);
+    ok("an unknown attachment name finds nothing",
+       [record attachmentForName:@"absent"] == nil, nil);
+    ok("the attachment view is a copy",
+       record.attachments != record.mutableAttachments, nil);
+
+    [record removeAttachmentsWithName:@"first"];
+    ok("removing by name drops every match",
+       record.attachments.count == 1 &&
+       [((XCTAttachment *)[record.attachments objectAtIndex:0]).name isEqualToString:@"second"], nil);
+
+    // Invalidation is the scope boundary. Everything that mutates must refuse
+    // afterwards, and the failure has to be the reference's own message.
+    [record invalidate];
+    ok("an invalidated record is no longer valid",
+       !record.isValid, nil);
+
+    XCTAttachment *late = [XCTAttachment attachmentWithUniformTypeIdentifier:nil];
+    BOOL raised = NO;
+    @try {
+        [record addAttachment:late];
+    } @catch (NSException *exception) {
+        raised = [[exception reason] containsString:@"Activity cannot be used after its scope has completed."];
+    }
+    ok("mutating an invalidated record raises", raised, nil);
+    ok("an invalidated record keeps the attachments it already had",
+       record.attachments.count == 1, nil);
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
@@ -512,6 +646,7 @@ int main(void)
     testAvailability();
     testEmptySuite();
     testActivityObservation();
+    testActivityRecord();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }

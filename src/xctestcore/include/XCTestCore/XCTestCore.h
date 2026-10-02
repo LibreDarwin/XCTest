@@ -34,11 +34,12 @@
 // one of its results is a selection, so neither would be nameable from here
 // otherwise.
 //
-// All four are private. None belongs in <XCTest/XCTest.h>, and none is
+// All five are private. None belongs in <XCTest/XCTest.h>, and none is
 // re-exported from this framework to a public header; the split is the same one
 // Apple's tree makes, and it is why this framework can be built without linking
 // XCTest at all.
 
+#import <XCTestCore/XCActivityRecord.h>
 #import <XCTestCore/XCTestConfiguration.h>
 #import <XCTestCore/XCTestConfigurationLoader.h>
 #import <XCTestCore/XCTTestRunSession.h>
