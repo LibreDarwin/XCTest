@@ -48,6 +48,16 @@
     return _XCTClassNameWithoutModuleFromClass([self class]);
 }
 
+// The class-method form of the accessor above, declared in XCTestInternal.h
+// next to the property. One C helper under both spellings, on purpose: a suite
+// names its class through this, and the cases inside that suite name the same
+// class through the instance accessor, and those two names have to be the same
+// string for a selection written either way to find the same class.
++ (NSString *)languageAgnosticTestClassNameForTestClass:(Class)testCaseClass
+{
+    return _XCTClassNameWithoutModuleFromClass(testCaseClass);
+}
+
 - (nullable NSString *)languageAgnosticTestMethodName
 {
     // A suite has no single method; only a case overrides this.

@@ -274,6 +274,42 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 
 @end
 
+/// Whether this OS can run this test class at all.
+///
+/// Asked of the class rather than the instance because the answer gates a suite
+/// tree, which is built before any case exists: a class that cannot run here is
+/// represented by a plain suite rather than by a case suite. See
+/// XCTTestCaseClassIsAvailable for what the answer is used for.
+///
+/// The reference answers by comparing +minimumOperatingSystemVersion -- a
+/// version the test class declares, defaulting to 0.0.0 -- against the running
+/// OS. That comparison is not ported, and the reason is worth stating rather
+/// than working around: it needs NSOperatingSystemVersion, which the reduced
+/// Foundation headers in this SDK do not declare, and adding it would mean
+/// re-declaring a Foundation member with a type of our own choosing, which is
+/// the one thing XCTestCoreFoundationCompat.h exists not to do -- a category
+/// re-declaration is only safe while its type matches. The hook is what
+/// survives: a class that does know it cannot run overrides the method below,
+/// and the caller asks the class rather than assuming, so the deferred
+/// comparison is a refinement of an answer that is already correct for every
+/// class that does not override it.
+@interface XCTestCase (XCTInternalAvailability)
+
+/// The default answer is yes: with nothing declared to fail against, there is
+/// no way to say a class is unavailable, and the reference reaches NO only
+/// through a subclass. Naming the hook is the point -- the caller checks for it
+/// rather than asking every class.
++ (BOOL)_isAvailable;
+
+@end
+
+/// Whether `testCaseClass` is a test case this OS can run.
+///
+/// The -respondsToSelector: test is the reference's and is the whole of it: a
+/// class that is not a test case, or that has no answer to give, is NO rather
+/// than being sent a question it does not implement.
+XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
+
 /// How a test names itself, and the identifier that names it to the selection
 /// machinery.
 ///
@@ -288,6 +324,15 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// displayed as `MyTestsCase`, because the module is noise in a report that is
 /// already scoped to one bundle.
 @property (nonatomic, readonly) NSString *languageAgnosticTestClassName;
+
+/// The same derivation for a class, for the caller that has a class and no
+/// instance -- which is the state a suite tree is built in, since the name that
+/// identifies a class is needed before any case of it exists. A thunk to the
+/// same C helper the accessor above uses, because the two spellings have to
+/// agree: one class is named by the suite that holds it and by the cases inside
+/// it, and a report that disagreed with itself would be worse than either
+/// spelling being wrong alone.
++ (NSString *)languageAgnosticTestClassNameForTestClass:(Class)testCaseClass;
 
 /// The test method name, or nil for an object that is not a single method. The
 /// base answers nil; a case derives it from its invocation.
@@ -422,6 +467,57 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// child suite. One generator is threaded through the whole tree so a seeded run
 /// is reproducible from the seed alone.
 - (void)_applyRandomExecutionOrderingWithGenerator:(XCTRandomNumberGenerator)generator;
+
+@end
+
+/// A suite that stands for a test class, whether or not any of its tests have
+/// been put in it yet.
+///
+/// Private because nothing outside the construction machinery makes one, and
+/// because the class is the construction machinery's own: the only way to reach
+/// one is to ask for a suite for a class, and the answer is a plain suite when
+/// the class is not one this OS can run.
+@interface XCTestCaseSuite : XCTestSuite
+
+/// The class this suite stands for. That is the whole difference from a plain
+/// suite, and it is what a later pass needs: a selection that named a class has
+/// to get back to the class to build the tests that belong in here, and it
+/// cannot do that from a name without a class lookup.
+@property (nonatomic, readonly) Class testCaseClass;
+
+/// Named for the class rather than for the file it came from, and given the
+/// identifier a selection will match this suite by.
+- (instancetype)initWithTestCaseClass:(Class)testCaseClass
+                            identifier:(nullable XCTTestIdentifier *)identifier;
+
+@end
+
+/// How a suite is built when a selection asks for a class rather than for a
+/// test.
+@interface XCTestSuite (XCTInternalConstruction)
+
+/// -initWithName: plus the identifier this suite is addressed by.
+///
+/// A convenience over the designated initializer rather than a second way to
+/// make a suite, and the ordering matters: the name is what a report prints and
+/// the identifier is what the removal loops match a child against, so a suite
+/// given an identifier is filterable in a way one built through -initWithName:
+/// alone is not. A nil identifier leaves the suite without one, which the loops
+/// read as "not in the set" -- so a suite constructed without an identifier is
+/// never dropped on its account, and stays.
+- (instancetype)initWithName:(NSString *)name
+                  identifier:(nullable XCTTestIdentifier *)identifier;
+
+/// An empty suite for `testCaseClass`: a case suite when the class can run
+/// here, a plain suite when it cannot.
+///
+/// The distinction is observable rather than cosmetic. A case suite carries the
+/// class, so a pass that has only the suite can fill it with that class's tests;
+/// a plain suite can only be filled by a caller that already knows what it
+/// asked for. That is why a class that cannot run still gets a suite at all --
+/// so a report can show the class was there and had nothing in it -- but not
+/// one that claims to know the class.
++ (XCTestSuite *)emptyTestSuiteForTestCaseClass:(Class)testCaseClass;
 
 @end
 

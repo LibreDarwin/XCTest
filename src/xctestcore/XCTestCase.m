@@ -757,6 +757,40 @@ static NSArray *_XCTSortedClassList(NSSet *classes)
     return own != base;
 }
 
+#pragma mark - Availability
+
++ (BOOL)_isAvailable
+{
+    // The reference compares this class's declared +minimumOperatingSystemVersion
+    // against the running OS and answers NO when the class asks for a system
+    // newer than this one. That declaration needs NSOperatingSystemVersion,
+    // which the reduced Foundation headers in this SDK do not carry; spelling it
+    // here would mean re-declaring a Foundation type with a definition of our
+    // own, which is what XCTestCoreFoundationCompat.h deliberately refuses to
+    // do. So the base answers yes and the hook stays: a subclass that does know
+    // it cannot run overrides this one method, and XCTTestCaseClassIsAvailable
+    // below asks the class rather than assuming, so nothing about the
+    // construction path depends on the comparison being here.
+    return YES;
+}
+
+/// Whether this class is one this OS can run. The caller is XCTestSuite's
+/// empty suite, which has to choose between a case suite and a plain one.
+///
+/// -respondsToSelector: rather than a kind-of test, and that is the reference's
+/// shape: any class may be named here, not only a test case, so the question is
+/// asked of the class that would answer it. A class with no answer is NO --
+/// which yields a plain suite, the conservative outcome, because a suite that is
+/// only a name is still an accurate report of an empty class, while a case suite
+/// claiming to know a class it cannot run is not.
+BOOL XCTTestCaseClassIsAvailable(Class testCaseClass)
+{
+    if ([testCaseClass respondsToSelector:@selector(_isAvailable)]) {
+        return [testCaseClass _isAvailable];
+    }
+    return NO;
+}
+
 #pragma mark - Suite extensions
 
 + (XCTestSuite *)defaultTestSuite

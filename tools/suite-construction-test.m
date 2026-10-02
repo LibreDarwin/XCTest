@@ -16,6 +16,12 @@
 //   - Swift counterparts. A selection can be spelled either way, so turning an
 //     Objective-C method into its Swift reading is what lets one runner's
 //     identifier match the other's tests.
+//   - Naming and availability. A suite for a class is named after the class with
+//     its module stripped, and is a case suite or a plain one depending on
+//     whether the class can run here. The two names a class is known by -- the
+//     one a suite carries and the one its cases carry -- have to be the same
+//     string, or a selection written one way stops matching the tree built the
+//     other.
 //
 // It links the installed framework rather than the object files, so it also
 // covers installation and the private declarations in XCTestInternal.h, which is
@@ -72,6 +78,26 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 {
     return @[];
 }
+@end
+
+// Answers the availability hook with no. The reference reaches that answer by
+// comparing a declared minimum OS version against the running one; a class that
+// wants to be unavailable says so here instead.
+@interface XCTSuiteConstructionUnavailableFixture : XCTestCase
+@end
+@implementation XCTSuiteConstructionUnavailableFixture
++ (BOOL)_isAvailable
+{
+    return NO;
+}
+@end
+
+// Named here because a class that is not a test case at all has to be refused
+// too: the factory takes any Class, and asking one that has no hook is how the
+// -respondsToSelector: guard is exercised.
+@interface XCTSuiteConstructionNotATestCase : NSObject
+@end
+@implementation XCTSuiteConstructionNotATestCase
 @end
 
 #pragma mark - Runtime facts
@@ -146,11 +172,124 @@ static void testSwiftCounterparts(void)
        [swiftSet setByAddingSwiftCounterparts].count == 1, nil);
 }
 
+#pragma mark - Naming
+
+static void testNaming(void)
+{
+    printf("naming\n");
+
+    // An Objective-C class name has no module to strip, so the derivation hands
+    // it back unchanged. What is being checked is that the class-method form
+    // exists and goes through the same derivation as the instance one.
+    NSString *fromClass = [XCTest languageAgnosticTestClassNameForTestClass:
+        [XCTSuiteConstructionPlainFixture class]];
+    ok("a class name with no module is unchanged",
+       [fromClass isEqualToString:@"XCTSuiteConstructionPlainFixture"], fromClass);
+
+    // The point of the class method being a thunk: a suite names its class
+    // before any case exists, and the cases inside name the same class through
+    // the instance accessor. A selection can only be matched if they agree.
+    XCTestCase *instance =
+        [XCTSuiteConstructionPlainFixture testCaseWithSelector:@selector(testExample)];
+    ok("the class and instance spellings agree",
+       [fromClass isEqualToString:instance.languageAgnosticTestClassName],
+       instance.languageAgnosticTestClassName);
+}
+
+#pragma mark - Availability
+
+static void testAvailability(void)
+{
+    printf("availability\n");
+
+    // The base cannot be unavailable: there is nothing declared to fail
+    // against, so the answer is yes and only a subclass can change it.
+    ok("XCTestCase itself is available", [XCTestCase _isAvailable], nil);
+
+    // Asked of the class, and inherited answers count: every XCTestCase subclass
+    // has the hook, so a plain subclass is available without saying anything.
+    ok("a plain test class is available",
+       XCTTestCaseClassIsAvailable([XCTSuiteConstructionPlainFixture class]), nil);
+    ok("a subclass that overrides the hook can refuse",
+       !XCTTestCaseClassIsAvailable([XCTSuiteConstructionUnavailableFixture class]), nil);
+    ok("a class that is not a test case is unavailable",
+       !XCTTestCaseClassIsAvailable([XCTSuiteConstructionNotATestCase class]), nil);
+
+    // The guard is the -respondsToSelector: one, not a kind-of test: the class
+    // with no hook is sent nothing at all.
+    ok("a class with no hook does not answer the question",
+       ![XCTSuiteConstructionNotATestCase respondsToSelector:@selector(_isAvailable)], nil);
+}
+
+#pragma mark - Empty suite
+
+static void testEmptySuite(void)
+{
+    printf("empty suite\n");
+
+    // A runnable class gets a case suite, which knows its class and is empty
+    // because nothing has been added to it yet. The factory's result is a
+    // XCTestSuite either way, so the class is what the kind-of test is for.
+    Class runnable = [XCTSuiteConstructionPlainFixture class];
+    XCTestSuite *forRunnable = [XCTestSuite emptyTestSuiteForTestCaseClass:runnable];
+    ok("a runnable class gets a case suite",
+       [forRunnable isKindOfClass:[XCTestCaseSuite class]], NSStringFromClass([forRunnable class]));
+    ok("the case suite is empty", forRunnable.tests.count == 0, nil);
+    ok("the case suite is named for the class",
+       [forRunnable.name isEqualToString:@"XCTSuiteConstructionPlainFixture"], forRunnable.name);
+    ok("the case suite knows its class",
+       ((XCTestCaseSuite *)forRunnable).testCaseClass == runnable, nil);
+
+    // The identifier is what a selection matches this suite by, so it is one
+    // component naming the class and a container: no method, no arguments.
+    XCTTestIdentifier *identifier = [forRunnable _xctTestIdentifier];
+    ok("the case suite's identifier names the class",
+       [identifier.components isEqualToArray:@[ @"XCTSuiteConstructionPlainFixture" ]],
+       identifier.identifierString);
+    ok("the case suite's identifier is a container", identifier.isContainer, nil);
+    ok("the case suite's identifier has no arguments", identifier.argumentIDs == nil, nil);
+
+    // A class that cannot run here gets a plain suite: still named, still
+    // addressable, still empty, but not carrying the class.
+    XCTestSuite *plainSuite =
+        [XCTestSuite emptyTestSuiteForTestCaseClass:[XCTSuiteConstructionUnavailableFixture class]];
+    ok("an unavailable class gets a plain suite",
+       [plainSuite class] == [XCTestSuite class], NSStringFromClass([plainSuite class]));
+    ok("the plain suite is still named for the class",
+       [plainSuite.name isEqualToString:@"XCTSuiteConstructionUnavailableFixture"], plainSuite.name);
+    ok("the plain suite is still addressable",
+       [plainSuite _xctTestIdentifier] != nil, nil);
+    ok("the plain suite's identifier names the class",
+       [[plainSuite _xctTestIdentifier].components
+           isEqualToArray:@[ @"XCTSuiteConstructionUnavailableFixture" ]],
+       [plainSuite _xctTestIdentifier].identifierString);
+    ok("the plain suite is empty", plainSuite.tests.count == 0, nil);
+
+    // The construction initializer stores what it is given, and leaves a suite
+    // built without one without an identifier at all -- which the removal loops
+    // read as "not selected", so such a suite is kept rather than dropped.
+    XCTTestIdentifier *given = [[XCTTestIdentifier alloc] initWithClassName:@"Module.Widget"];
+    XCTestSuite *addressed = [[XCTestSuite alloc] initWithName:@"Widget" identifier:given];
+    ok("the identifier given at construction is kept",
+       [[addressed _xctTestIdentifier].components isEqualToArray:@[ @"Widget" ]],
+       [addressed _xctTestIdentifier].identifierString);
+    ok("a module is stripped from the stored identifier",
+       ![addressed _xctTestIdentifier].representsBundle, nil);
+    XCTestSuite *unaddressed = [[XCTestSuite alloc] initWithName:@"Loose" identifier:nil];
+    ok("a nil identifier leaves the suite without one",
+       [unaddressed _xctTestIdentifier] == nil, nil);
+    ok("the name is set either way",
+       [unaddressed.name isEqualToString:@"Loose"], unaddressed.name);
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
     testRuntimeFacts();
     testSwiftCounterparts();
+    testNaming();
+    testAvailability();
+    testEmptySuite();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }

@@ -21,8 +21,9 @@
     NSMutableArray<XCTest *> *_tests;
     NSString *_name;
     // The identifier of the selection this suite stands for, when it was built
-    // from one. Unassigned until the construction initializer is ported; see
-    // -_xctTestIdentifier.
+    // from one by -initWithName:identifier:. Stays nil for a suite built through
+    // -initWithName:, which is the same answer the removal loops read as "not in
+    // the set". See -_xctTestIdentifier.
     XCTTestIdentifier *_identifier;
 }
 
@@ -39,6 +40,23 @@
     if (self != nil) {
         _name = [name copy];
         _tests = [NSMutableArray array];
+    }
+    return self;
+}
+
+- (instancetype)initWithName:(NSString *)name identifier:(XCTTestIdentifier *)identifier
+{
+    // Sent to self rather than to super, which is the reference's shape and the
+    // reason a subclass may add its own storage by overriding this: the
+    // initializer chain is the only thing a suite has to go through to exist.
+    self = [self initWithName:name];
+    if (self != nil && identifier != nil) {
+        // Only a real identifier is stored. A suite built with nil keeps the
+        // nil that -initWithName: left behind, which is what the removal loops
+        // below read as "this suite was not selected" -- so a suite that was
+        // never addressed by a selection is never dropped for lack of an
+        // identifier.
+        _identifier = identifier;
     }
     return self;
 }
@@ -110,9 +128,10 @@
 {
     // Stored rather than derived: a suite's identifier names the selection it
     // stands for, which only its construction knows, so there is nothing here
-    // to rebuild from the name. It stays nil until that initializer is ported,
-    // and nil is a useful answer: the removal loops treat "not in the set" as
-    // "keep", so a suite is never dropped by a child's identifier.
+    // to rebuild from the name. A suite made through -initWithName: has none,
+    // and nil is a useful answer rather than a gap: the removal loops treat
+    // "not in the set" as "keep", so such a suite is never dropped by a child's
+    // identifier.
     return _identifier;
 }
 
@@ -289,6 +308,25 @@
     return suite;
 }
 
++ (XCTestSuite *)emptyTestSuiteForTestCaseClass:(Class)testCaseClass
+{
+    // The identifier is built first and used by both branches, from the class
+    // name with its module still attached: stripping the module is the
+    // identifier's own job when it is constructed, so a Swift class and an
+    // Objective-C one reach the same spelling either way round.
+    XCTTestIdentifier *identifier = [[XCTTestIdentifier alloc] initWithClassName:NSStringFromClass(testCaseClass)];
+    if (XCTTestCaseClassIsAvailable(testCaseClass)) {
+        // The case suite names itself from the class, so the name is not passed
+        // in here.
+        return [[XCTestCaseSuite alloc] initWithTestCaseClass:testCaseClass identifier:identifier];
+    }
+    // Not runnable here, so not a case suite -- but still a suite, still named
+    // and still addressable, because a report that lists the class with nothing
+    // under it is the honest outcome, and a missing class is not.
+    return [[self alloc] initWithName:[XCTest languageAgnosticTestClassNameForTestClass:testCaseClass]
+                            identifier:identifier];
+}
+
 #pragma mark - Default suite
 
 // The header declares `defaultTestSuite` as a class property, which synthesises
@@ -296,6 +334,32 @@
 + (XCTestSuite *)defaultTestSuite
 {
     return [self testSuiteForBundlePath:@"All Tests"];
+}
+
+@end
+
+@implementation XCTestCaseSuite {
+    Class _testCaseClass;
+}
+
+- (instancetype)initWithTestCaseClass:(Class)testCaseClass identifier:(XCTTestIdentifier *)identifier
+{
+    // The name is the class name with its module stripped, not the name of the
+    // file or bundle it was found in: a suite for a class is what a report
+    // prints, and the class is what the caller asked for. XCTestCaseSuite has no
+    // setUp or tearDown of its own to contribute yet, so there is nothing else
+    // to record here -- the class is what a later pass needs to fill the suite.
+    self = [self initWithName:[XCTest languageAgnosticTestClassNameForTestClass:testCaseClass]
+                   identifier:identifier];
+    if (self != nil) {
+        _testCaseClass = testCaseClass;
+    }
+    return self;
+}
+
+- (Class)testCaseClass
+{
+    return _testCaseClass;
 }
 
 @end
