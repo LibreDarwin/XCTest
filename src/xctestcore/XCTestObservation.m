@@ -32,7 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
     // lock, so an observer that adds or removes observers from inside a callback
     // -- legal, if unusual -- cannot mutate the collection mid-broadcast.
     NSMutableArray<id<XCTestObservation>> *_observers;
+    // Same locking and snapshot rules as _observers, and kept separately so the
+    // two protocols cannot observe each other.
+    NSMutableArray<id<_XCTestObservationPrivate>> *_privateObservers;
     NSLock *_lock;
+    BOOL _suspended;
 }
 
 + (XCTestObservationCenter *)sharedTestObservationCenter
@@ -50,6 +54,7 @@ NS_ASSUME_NONNULL_BEGIN
     self = [super init];
     if (self != nil) {
         _observers = [NSMutableArray array];
+        _privateObservers = [NSMutableArray array];
         _lock = [[NSLock alloc] init];
     }
     return self;
@@ -64,7 +69,19 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     [_lock lock];
-    [_observers addObject:testObserver];
+    // Routing is by protocol conformance, not by which methods the observer
+    // implements, and an observer lands in exactly one list. _XCTestObservation
+    // Private refines XCTestObservation rather than extending it, so an observer
+    // that opts in to the private protocol is served by the private list alone
+    // and does not also receive the public suite, case and issue callbacks.
+    if ([testObserver conformsToProtocol:@protocol(_XCTestObservationPrivate)]) {
+        // The conformance test above is what justifies the narrowing; the
+        // protocol refines XCTestObservation rather than extending it, so the
+        // compiler cannot infer the downcast on its own.
+        [_privateObservers addObject:(id<_XCTestObservationPrivate>)testObserver];
+    } else {
+        [_observers addObject:testObserver];
+    }
     [_lock unlock];
 }
 
@@ -78,7 +95,29 @@ NS_ASSUME_NONNULL_BEGIN
     // Identity, not equality: two distinct observers may compare equal, and
     // removing the wrong one would silently stop a reporter from being called.
     [_observers removeObjectIdenticalTo:testObserver];
+    // Removed from both lists, since registration can put an observer in either
+    // and a half-removed observer would keep receiving activity callbacks after
+    // the caller believes it has been detached.
+    [_privateObservers removeObjectIdenticalTo:(id<_XCTestObservationPrivate>)testObserver];
     [_lock unlock];
+}
+
+- (NSArray<id<_XCTestObservationPrivate>> *)privateObservers
+{
+    [_lock lock];
+    NSArray<id<_XCTestObservationPrivate>> *snapshot = [_privateObservers copy];
+    [_lock unlock];
+    return snapshot;
+}
+
+- (BOOL)suspended
+{
+    return _suspended;
+}
+
+- (void)setSuspended:(BOOL)suspended
+{
+    _suspended = suspended;
 }
 
 #pragma mark - Broadcast
@@ -182,6 +221,87 @@ NS_ASSUME_NONNULL_BEGIN
     NSArray<id<XCTestObservation>> *snapshot = [_observers copy];
     [_lock unlock];
     return snapshot;
+}
+
+/// Runs a block against every observer in one list that implements a selector.
+///
+/// This is the single dispatch point the private activity hooks go through, and
+/// the reason the ordering argument exists at all: activity start is reported in
+/// registration order, but finish is reported in reverse, so that a set of nested
+/// activities -- each one opening a child -- is reported in the order a reader
+/// would expect. Forward order on finish would tell a reporter that the innermost
+/// activity ended before the outermost one that contains it did.
+- (void)_performBlockOnObservers:(NSArray *)observers
+             respondingToSelector:(SEL)selector
+                          reverse:(BOOL)reverse
+                             block:(void (^)(id observer))block
+{
+    if (_suspended) {
+        return;
+    }
+
+    // Enumerated over a copy so that an observer which adds or removes observers
+    // from inside a callback cannot mutate the collection mid-broadcast.
+    NSArray *snapshot = [observers copy];
+    NSEnumerationOptions options = reverse ? NSEnumerationReverse : 0;
+
+    [snapshot enumerateObjectsWithOptions:options
+                               usingBlock:^(id observer, NSUInteger index, BOOL *stop) {
+        (void)index;
+        (void)stop;
+        if (![observer respondsToSelector:selector]) {
+            return;
+        }
+
+        // An observer that throws is isolated rather than propagated, exactly as
+        // in the public broadcast path above: a broken reporter is a bug in the
+        // reporting layer, and letting it escape would turn it into a spurious
+        // failure of the test under it, or worse, abort the run.
+        @try {
+            block(observer);
+        } @catch (NSException *exception) {
+            [self _handleExceptionThrownBy:exception
+                                  inMethod:_cmd
+                          exceptionPointer:NULL];
+        }
+    }];
+}
+
+/// Routes an exception thrown by an observer callback.
+///
+/// The reference passes each caught exception through a single handler that can
+/// be replaced by a caller-set block. That hook is not ported yet, so the
+/// exception is contained here and the run continues, which is the same
+/// containment the public broadcast path has always had.
+- (void)_handleExceptionThrownBy:(nullable NSException *)exception
+                        inMethod:(SEL)method
+                exceptionPointer:(NSException * _Nullable * _Nullable)exceptionPointer
+{
+    (void)exception;
+    (void)method;
+    (void)exceptionPointer;
+}
+
+- (void)_context:(XCTContext *)context
+    willStartActivity:(XCActivityRecord *)activity
+{
+    [self _performBlockOnObservers:self.privateObservers
+             respondingToSelector:@selector(_context:willStartActivity:)
+                          reverse:NO
+                             block:^(id<_XCTestObservationPrivate> observer) {
+        [observer _context:context willStartActivity:activity];
+    }];
+}
+
+- (void)_context:(XCTContext *)context
+    didFinishActivity:(XCActivityRecord *)activity
+{
+    [self _performBlockOnObservers:self.privateObservers
+             respondingToSelector:@selector(_context:didFinishActivity:)
+                          reverse:YES
+                             block:^(id<_XCTestObservationPrivate> observer) {
+        [observer _context:context didFinishActivity:activity];
+    }];
 }
 
 - (void)testBundleWillStart:(NSBundle *)testBundle

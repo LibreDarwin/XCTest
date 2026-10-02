@@ -31,6 +31,7 @@
 
 #import "XCTestInternal.h"
 #import "XCTestFoundationCompat.h"
+#import "XCTestObservationInternal.h"
 
 #import <Foundation/Foundation.h>
 
@@ -98,6 +99,119 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 @interface XCTSuiteConstructionNotATestCase : NSObject
 @end
 @implementation XCTSuiteConstructionNotATestCase
+@end
+
+#pragma mark - Activity observation fixtures
+
+// Records the order callbacks arrive in, so that the start and finish
+// dispatches can be told apart from delivery alone. A single shared counter
+// rather than one per observer: the point is relative order between observers.
+static NSUInteger ActivityObserverOrder = 0;
+
+// Implements both private callbacks, which is what registration routes on.
+@interface ActivityObserverFixture : NSObject <_XCTestObservationPrivate>
+@property (nonatomic) NSUInteger order;
+@property (nonatomic) NSUInteger startCount;
+@property (nonatomic) NSUInteger finishCount;
+@property (nonatomic) XCTContext *startContext;
+@property (nonatomic) XCActivityRecord *startActivity;
+@property (nonatomic) XCTContext *finishContext;
+@property (nonatomic) XCActivityRecord *finishActivity;
+@end
+
+@implementation ActivityObserverFixture
+
+- (void)_context:(XCTContext *)context
+    willStartActivity:(XCActivityRecord *)activity
+{
+    self.order = ActivityObserverOrder++;
+    self.startCount++;
+    self.startContext = context;
+    self.startActivity = activity;
+}
+
+- (void)_context:(XCTContext *)context
+    didFinishActivity:(XCActivityRecord *)activity
+{
+    self.order = ActivityObserverOrder++;
+    self.finishCount++;
+    self.finishContext = context;
+    self.finishActivity = activity;
+}
+
+- (BOOL)_sawStart
+{
+    return self.startCount > 0;
+}
+
+- (BOOL)_sawFinish
+{
+    return self.finishCount > 0;
+}
+
+@end
+
+// The public protocol only, so registration must keep it out of the private
+// list. A reporter that never declared interest in activity should not be
+// handed a context and a record it has no way to interpret.
+@interface PublicObserverFixture : NSObject <XCTestObservation>
+@property (nonatomic) BOOL sawStart;
+@property (nonatomic) BOOL sawFinish;
+@end
+
+@implementation PublicObserverFixture
+- (void)_context:(XCTContext *)context
+    willStartActivity:(XCActivityRecord *)activity
+{
+    self.sawStart = YES;
+}
+- (void)_context:(XCTContext *)context
+    didFinishActivity:(XCActivityRecord *)activity
+{
+    self.sawFinish = YES;
+}
+@end
+
+// Conforms to the private protocol but implements only the start callback.
+// Every method on the protocol is optional, so the finish dispatch has to skip
+// it rather than message a method that is not there.
+@interface ActivityStartOnlyFixture : NSObject <_XCTestObservationPrivate>
+@property (nonatomic) NSUInteger startCount;
+@property (nonatomic) NSUInteger finishCount;
+@end
+
+@implementation ActivityStartOnlyFixture
+- (void)_context:(XCTContext *)context
+    willStartActivity:(XCActivityRecord *)activity
+{
+    self.startCount++;
+}
+- (BOOL)_sawStart
+{
+    return self.startCount > 0;
+}
+- (BOOL)_sawFinish
+{
+    return self.finishCount > 0;
+}
+@end
+
+// Throws from inside the callback, to pin that a broken reporter is contained
+// rather than propagated into the test that was running.
+@interface ThrowingActivityObserverFixture : NSObject <_XCTestObservationPrivate>
+@end
+
+@implementation ThrowingActivityObserverFixture
+- (void)_context:(XCTContext *)context
+    willStartActivity:(XCActivityRecord *)activity
+{
+    [NSException raise:@"ActivityObserverFailure" format:@"deliberate"];
+}
+- (void)_context:(XCTContext *)context
+    didFinishActivity:(XCActivityRecord *)activity
+{
+    [NSException raise:@"ActivityObserverFailure" format:@"deliberate"];
+}
 @end
 
 #pragma mark - Runtime facts
@@ -282,6 +396,113 @@ static void testEmptySuite(void)
        [unaddressed.name isEqualToString:@"Loose"], unaddressed.name);
 }
 
+static void testActivityObservation(void)
+{
+    // Activity start and finish are reported through a private protocol layered
+    // on XCTestObservation, not through it. An observer has to opt in by
+    // conforming to that protocol, and registration routes it to a list of its
+    // own -- so the checks below are about the split, not just about delivery.
+    XCTestObservationCenter *center = [XCTestObservationCenter sharedTestObservationCenter];
+
+    ActivityObserverFixture *first = [[ActivityObserverFixture alloc] init];
+    ActivityObserverFixture *second = [[ActivityObserverFixture alloc] init];
+    ActivityObserverFixture *third = [[ActivityObserverFixture alloc] init];
+    PublicObserverFixture *publicOnly = [[PublicObserverFixture alloc] init];
+
+    [center addTestObserver:first];
+    [center addTestObserver:second];
+    [center addTestObserver:third];
+    [center addTestObserver:publicOnly];
+
+    ok("a private observer is listed as a private observer",
+       [center.privateObservers containsObject:first], nil);
+    ok("a public observer is not a private observer",
+       ![center.privateObservers containsObject:publicOnly], nil);
+
+    // Stands in for the XCTContext and XCActivityRecord the real activity path
+    // passes. Neither is defined yet, and the observation center only ever
+    // forwards them, so opaque placeholders are enough to pin the dispatch.
+    XCTContext *context = (XCTContext *)@"context";
+    XCActivityRecord *activity = (XCActivityRecord *)@"activity";
+
+    [center _context:context willStartActivity:activity];
+
+    ok("activity start reaches a private observer",
+       [first _sawStart], nil);
+    ok("activity start carries the context it was given",
+       first.startContext == context, nil);
+    ok("activity start carries the activity it was given",
+       first.startActivity == activity, nil);
+    ok("activity start is reported in registration order",
+       first.order < second.order && second.order < third.order, nil);
+    ok("activity start does not reach a public observer",
+       !publicOnly.sawStart, nil);
+    ok("activity start does not report a finish",
+       ![first _sawFinish], nil);
+
+    // Finish unwinds. Reporting it in the same order as start would tell a
+    // reporter that the innermost of several nested activities ended before the
+    // outermost one containing it, so the reference walks the list backwards.
+    [center _context:context didFinishActivity:activity];
+
+    ok("activity finish reaches a private observer",
+       [first _sawFinish], nil);
+    ok("activity finish carries the context it was given",
+       first.finishContext == context, nil);
+    ok("activity finish is reported in reverse registration order",
+       third.order < second.order && second.order < first.order, nil);
+    ok("activity finish does not reach a public observer",
+       !publicOnly.sawFinish, nil);
+
+    // Every method on the private protocol is optional, so an observer that
+    // implements only one of the two callbacks must not be handed the other.
+    ActivityStartOnlyFixture *startOnly = [[ActivityStartOnlyFixture alloc] init];
+    [center addTestObserver:startOnly];
+    [center _context:context willStartActivity:activity];
+    [center _context:context didFinishActivity:activity];
+    ok("an observer implementing only the start callback is filtered out of finish",
+       [startOnly _sawStart] && startOnly.finishCount == 0, nil);
+
+    // A reporter that throws is contained: it must not take down the run, and it
+    // must not stop the observers after it from being called.
+    ThrowingActivityObserverFixture *thrower = [[ThrowingActivityObserverFixture alloc] init];
+    ActivityObserverFixture *afterThrower = [[ActivityObserverFixture alloc] init];
+    [center addTestObserver:thrower];
+    [center addTestObserver:afterThrower];
+    [center _context:context willStartActivity:activity];
+    ok("an observer that throws does not stop the ones after it",
+       [afterThrower _sawStart], nil);
+    [center removeTestObserver:thrower];
+
+    // Suspension is what the runner uses while it tears down and re-arms, so
+    // that teardown is not itself reported as activity.
+    center.suspended = YES;
+    ActivityObserverFixture *whileSuspended = [[ActivityObserverFixture alloc] init];
+    [center addTestObserver:whileSuspended];
+    [center _context:context willStartActivity:activity];
+    ok("no activity is reported while observation is suspended",
+       ![whileSuspended _sawStart], nil);
+    center.suspended = NO;
+    [center _context:context willStartActivity:activity];
+    ok("activity is reported again once observation resumes",
+       [whileSuspended _sawStart], nil);
+
+    // Removal has to clear the private list too. An observer left behind would
+    // keep receiving activity callbacks after the caller believes it detached.
+    [center removeTestObserver:whileSuspended];
+    whileSuspended.startCount = 0;
+    [center _context:context willStartActivity:activity];
+    ok("a removed private observer stops being called",
+       whileSuspended.startCount == 0, nil);
+    ok("a removed private observer leaves the private list",
+       ![center.privateObservers containsObject:whileSuspended], nil);
+
+    for (id observer in @[ first, second, third, publicOnly, startOnly, afterThrower,
+                           whileSuspended ]) {
+        [center removeTestObserver:observer];
+    }
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
@@ -290,6 +511,7 @@ int main(void)
     testNaming();
     testAvailability();
     testEmptySuite();
+    testActivityObservation();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }

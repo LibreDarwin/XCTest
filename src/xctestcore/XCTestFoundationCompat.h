@@ -118,6 +118,13 @@ NS_ASSUME_NONNULL_BEGIN
 // behaviour and are relied on throughout the runner.
 @interface NSArray<ObjectType> (XCTSDKCompat)
 @property (readonly, nullable) ObjectType firstObject;
+/// Enumerates the elements, optionally in reverse. The observation center
+/// reports activity finish in reverse registration order so that nested
+/// activities unwind in the order they were entered, and NSEnumerationReverse
+/// is what expresses that without hand-rolling an index loop. A probe confirms
+/// the runtime implements it; only the reduced header omits the declaration.
+- (void)enumerateObjectsWithOptions:(NSEnumerationOptions)opts
+                         usingBlock:(void (NS_NOESCAPE ^)(ObjectType obj, NSUInteger idx, BOOL *stop))block;
 - (NSUInteger)indexOfObject:(ObjectType)object;
 - (NSUInteger)indexOfObjectIdenticalTo:(ObjectType)object;
 /// The first index whose element passes `predicate`, or NSNotFound. A probe
