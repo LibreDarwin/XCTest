@@ -260,6 +260,18 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// generic classes, which cannot be instantiated by name.
 + (BOOL)_isDiscoverable;
 
+/// Whether the receiver supplies its own +defaultTestSuite, rather than
+/// inheriting XCTestCase's. Every test case inherits the method, so this is
+/// not a -respondsToSelector: question: it is whether this class's answer is
+/// its own, which is what decides whether an empty suite is still worth
+/// including.
++ (BOOL)overridesDefaultTestSuite;
+
+/// Whether the receiver supplies its own +testInvocations, rather than
+/// inheriting XCTestCase's runtime selector scan. A class that overrides it is
+/// asked for the invocations a selection is filtering, one test at a time.
++ (BOOL)overridesTestInvocations;
+
 @end
 
 /// How a test names itself, and the identifier that names it to the selection

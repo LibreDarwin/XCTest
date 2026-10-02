@@ -607,6 +607,16 @@ check-identifier-name: $(XCTEST_FW_STAMP)
 check-ordering: $(XCTEST_FW_STAMP)
 	@FRAMEWORK="$(XCTEST_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-ordering.sh
 
+# Reconstructing a suite tree from a flat selection asks two things the rest of
+# the port cannot: whether a class customises +defaultTestSuite or
+# +testInvocations -- which decides whether the class's own suite is used, its
+# invocations are scanned, or an empty suite is built -- and whether a selection
+# spelled one way gains the identifiers of the other. Both are answered by
+# comparing implementations or by rewriting option bits, so they are checked as
+# decisions on real classes rather than as methods.
+check-suite-construction: $(XCTESTCORE_FW_STAMP)
+	@FRAMEWORK="$(XCTESTCORE_FW_DIR)" SDK="$(SDK)" CC="$(CC)" bash tools/check-suite-construction.sh
+
 # The implementation has to compile on its own terms, and every function the headers
 # export has to exist, or a caller only reaches it by luck. check-headers and
 # check-macros prove the declarations are well-formed; this proves the definitions
@@ -617,7 +627,7 @@ check-ordering: $(XCTEST_FW_STAMP)
 check-sources:
 	@SDK="$(SDK)" CC="$(CC)" bash tools/check-sources.sh
 
-test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-ordering check-sources
+test: check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-ordering check-suite-construction check-sources
 
 # Editor configuration, not build output. Not in `all` and not in `test`: the
 # committed src/xctest/.clangd and src/xctestcore/.clangd are already usable,
@@ -683,7 +693,8 @@ check-xcode:
 	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-run-session.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-class-discovery.sh && \
 	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-identifier-name.sh && \
-	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-ordering.sh
+	FRAMEWORK="build/xcode-$$dir/XCTest.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-ordering.sh && \
+	FRAMEWORK="build/xcode-$$dir/XCTestCore.framework" SDK="$(SDK)" CC="$(CC)" bash tools/check-suite-construction.sh
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -702,4 +713,4 @@ install: all
 clean:
 	rm -rf build
 
-.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-ordering check-sources test clangd-config check-xcode install clean
+.PHONY: all check-link smoke check-framework check-expectations check-source-context check-metrics check-configuration check-selection check-builder check-loader check-run-session check-class-discovery check-identifier-name check-ordering check-suite-construction check-sources test clangd-config check-xcode install clean

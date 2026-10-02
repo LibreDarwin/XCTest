@@ -738,6 +738,25 @@ static NSArray *_XCTSortedClassList(NSSet *classes)
     return YES;
 }
 
++ (BOOL)overridesDefaultTestSuite
+{
+    // A class-method implementation pointer, compared against the base. Every
+    // subclass inherits +defaultTestSuite, so -respondsToSelector: is always YES
+    // and the only question is whether this class's answer is its own.
+    IMP base = method_getImplementation(class_getClassMethod([XCTestCase class], @selector(defaultTestSuite)));
+    IMP own = method_getImplementation(class_getClassMethod(self, @selector(defaultTestSuite)));
+    return own != base;
+}
+
++ (BOOL)overridesTestInvocations
+{
+    // As above, for the invocation scan: a subclass that builds its own
+    // invocations takes charge of which methods are tests.
+    IMP base = method_getImplementation(class_getClassMethod([XCTestCase class], @selector(testInvocations)));
+    IMP own = method_getImplementation(class_getClassMethod(self, @selector(testInvocations)));
+    return own != base;
+}
+
 #pragma mark - Suite extensions
 
 + (XCTestSuite *)defaultTestSuite

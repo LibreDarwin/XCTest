@@ -1127,6 +1127,22 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     return [[[self class] alloc] initWithArray:identifiers];
 }
 
+- (XCTTestIdentifierSet *)setByAddingSwiftCounterparts
+{
+    // Built rather than mapped so an identifier with a counterpart contributes
+    // both spellings and one without contributes itself: the result is the union
+    // of the original and the Swift spellings, never a replacement.
+    XCTTestIdentifierSetBuilder *builder = [[XCTTestIdentifierSetBuilder alloc] init];
+    for (XCTTestIdentifier *identifier in self) {
+        [builder addTestIdentifier:identifier];
+        XCTTestIdentifier *counterpart = identifier.swiftMethodCounterpart;
+        if (counterpart != nil) {
+            [builder addTestIdentifier:counterpart];
+        }
+    }
+    return builder.testIdentifierSet;
+}
+
 - (NSDictionary<XCTTestIdentifier *, NSSet<XCTTestIdentifier *> *> *)
     testIdentifiersGroupedByFirstComponentIdentifier
 {

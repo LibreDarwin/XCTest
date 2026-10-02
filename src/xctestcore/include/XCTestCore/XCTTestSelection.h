@@ -273,6 +273,15 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 - (XCTTestIdentifierSet *)setByAddingTestIdentifiersFromSet:(XCTTestIdentifierSet *)other;
 - (XCTTestIdentifierSet *)setByApplyingBlock:(id _Nullable (^)(XCTTestIdentifier *identifier))block;
 
+/// The receiver plus the Swift spelling of each of its identifiers.
+///
+/// A selection can be written in either the Swift Testing or the Objective-C
+/// spelling of the same test, and a run driven by one runner still has to find
+/// the other's tests. An identifier that is already read as Swift has no
+/// counterpart, so a set that is already fully Swift stays as it was rather
+/// than growing a duplicate of every entry.
+- (XCTTestIdentifierSet *)setByAddingSwiftCounterparts;
+
 /// The identifiers grouped by the identifier of their first component, which
 /// is how a run turns a flat identifier list back into a tree.
 - (NSDictionary<XCTTestIdentifier *, NSSet<XCTTestIdentifier *> *> *)testIdentifiersGroupedByFirstComponentIdentifier;
