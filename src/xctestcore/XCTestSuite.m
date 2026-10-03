@@ -308,6 +308,30 @@
     return suite;
 }
 
+- (BOOL)shouldIncludeWhenIncludingEmptySuites
+{
+    // A suite with tests in it is never in question; this is only about the ones
+    // a selection or a filter left with nothing under them.
+    if (self.tests.count > 0) {
+        return YES;
+    }
+    // Of the empty suites, only a plain one is kept. It is the suite a class
+    // that cannot run here is given, and listing it says "this class is here,
+    // and none of it ran" -- which is the truth, and better than its absence. An
+    // XCTestCaseSuite is a runnable class, so an empty one means its tests were
+    // all filtered out, and there is nothing left to say about it. A subclass
+    // with a setUp of its own matches neither and is dropped for the same reason.
+    //
+    // Compared by IMP rather than by -isKindOfClass: an XCTestCaseSuite *is* a
+    // suite, so the kind-of test cannot separate the two, and what is being asked
+    // is exactly whether this object runs the suite setUp or a different one.
+    IMP setUp = [self methodForSelector:@selector(setUp)];
+    if (setUp == [XCTestCaseSuite instanceMethodForSelector:@selector(setUp)]) {
+        return NO;
+    }
+    return setUp == [XCTestSuite instanceMethodForSelector:@selector(setUp)];
+}
+
 + (XCTestSuite *)emptyTestSuiteForTestCaseClass:(Class)testCaseClass
 {
     // The identifier is built first and used by both branches, from the class
@@ -360,6 +384,34 @@
 - (Class)testCaseClass
 {
     return _testCaseClass;
+}
+
+- (void)setUp
+{
+    Class testCaseClass = self.testCaseClass;
+    // Every subclass inherits +setUp from XCTestCase, so asking whether the class
+    // responds is no use at all -- it always does. What distinguishes a class
+    // with setup work from one without is whether the IMP it would run is
+    // XCTestCase's own, and that is what asking for the method directly answers.
+    if ([testCaseClass methodForSelector:@selector(setUp)] == [XCTestCase methodForSelector:@selector(setUp)]) {
+        return;
+    }
+    [XCTContext runInternalActivityNamed:@"Suite Set Up" block:^(id<XCTActivity> activity) {
+        (void)activity;
+        [self.testCaseClass setUp];
+    }];
+}
+
+- (void)tearDown
+{
+    Class testCaseClass = self.testCaseClass;
+    if ([testCaseClass methodForSelector:@selector(tearDown)] == [XCTestCase methodForSelector:@selector(tearDown)]) {
+        return;
+    }
+    [XCTContext runInternalActivityNamed:@"Suite Tear Down" block:^(id<XCTActivity> activity) {
+        (void)activity;
+        [self.testCaseClass tearDown];
+    }];
 }
 
 @end

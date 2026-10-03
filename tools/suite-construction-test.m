@@ -86,6 +86,41 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 // Answers the availability hook with no. The reference reaches that answer by
 // comparing a declared minimum OS version against the running one; a class that
 // wants to be unavailable says so here instead.
+// A suite subclass with a setUp of its own. It exists to be excluded: it matches
+// neither XCTestSuite's stock setUp nor XCTestCaseSuite's.
+@interface XCTSuiteConstructionSuiteWithSetUpFixture : XCTestSuite
+@end
+
+@implementation XCTSuiteConstructionSuiteWithSetUpFixture
+- (void)setUp {}
+@end
+
+// A class with setup work of its own. The count is what lets the suite's setUp
+// be observed without the harness having to guess whether it ran.
+@interface XCTSuiteConstructionSetupFixture : XCTestCase
+@property (class, nonatomic, readonly) NSUInteger setUpCount;
+@property (class, nonatomic, readonly) NSUInteger tearDownCount;
+@end
+
+@implementation XCTSuiteConstructionSetupFixture
+static NSUInteger XCTSuiteConstructionSetUpCount = 0;
+static NSUInteger XCTSuiteConstructionTearDownCount = 0;
+
++ (NSUInteger)setUpCount { return XCTSuiteConstructionSetUpCount; }
++ (NSUInteger)tearDownCount { return XCTSuiteConstructionTearDownCount; }
+
++ (void)setUp
+{
+    XCTSuiteConstructionSetUpCount++;
+}
+
++ (void)tearDown
+{
+    XCTSuiteConstructionTearDownCount++;
+}
+
+@end
+
 @interface XCTSuiteConstructionUnavailableFixture : XCTestCase
 @end
 @implementation XCTSuiteConstructionUnavailableFixture
@@ -791,17 +826,111 @@ static void testContext(void)
     [center removeTestObserver:observer];
 }
 
+// A suite that stands for a class has to run that class's +setUp and +tearDown,
+// and has to stay quiet when the class has neither. The way to tell is the IMP:
+// asking whether the class responds is no use, because every subclass inherits
+// both from XCTestCase.
+static void testCaseSuiteLifecycle(void)
+{
+    printf("\nXCTestCaseSuite lifecycle\n");
+
+    XCTestObservationCenter *center = [XCTestObservationCenter sharedTestObservationCenter];
+    ActivityObserverFixture *observer = [[ActivityObserverFixture alloc] init];
+    [center addTestObserver:observer];
+
+    // A class that does nothing: the suite runs neither, and no activity is
+    // reported for it.
+    XCTestSuite *plain = [XCTestSuite emptyTestSuiteForTestCaseClass:[XCTSuiteConstructionPlainFixture class]];
+    NSUInteger before = observer.startCount;
+    [plain setUp];
+    [plain tearDown];
+    ok("a class with no +setUp reports no suite set-up", observer.startCount == before, nil);
+    ok("a class with no +tearDown reports no suite tear-down", observer.startCount == before, nil);
+
+    // A class with its own: both run, each inside an activity of the runner's
+    // own making, named for the phase.
+    XCTestSuite *withSetup = [XCTestSuite emptyTestSuiteForTestCaseClass:[XCTSuiteConstructionSetupFixture class]];
+    ok("the fixture starts with nothing run",
+       XCTSuiteConstructionSetupFixture.setUpCount == 0 && XCTSuiteConstructionSetupFixture.tearDownCount == 0,
+       nil);
+
+    before = observer.startCount;
+    [withSetup setUp];
+    ok("the class's +setUp is run by the suite", XCTSuiteConstructionSetupFixture.setUpCount == 1, nil);
+    ok("the suite's set-up is reported", observer.startCount == before + 1, nil);
+    ok("the suite's set-up activity is named for the phase",
+       [observer.startActivity.name isEqualToString:@"Suite Set Up"], observer.startActivity.name);
+    ok("the suite's set-up is the framework's own activity",
+       [observer.startActivity.activityType isEqualToString:@"com.apple.dt.xctest.activity-type.internal"],
+       observer.startActivity.activityType);
+    ok("the suite's set-up activity reports the context it ran in",
+       observer.startContext == [XCTContext currentContextIfAvailable], nil);
+
+    before = observer.startCount;
+    [withSetup tearDown];
+    ok("the class's +tearDown is run by the suite", XCTSuiteConstructionSetupFixture.tearDownCount == 1, nil);
+    ok("the suite's tear-down is reported", observer.startCount == before + 1, nil);
+    ok("the suite's tear-down activity is named for the phase",
+       [observer.startActivity.name isEqualToString:@"Suite Tear Down"], observer.startActivity.name);
+
+    [center removeTestObserver:observer];
+}
+
+// An empty suite is only worth showing when it still means something, and the
+// judge is the setUp it runs rather than what kind of suite it is.
+static void testEmptySuiteInclusion(void)
+{
+    printf("\nempty suite inclusion\n");
+
+    // A suite with tests in it is never in question.
+    XCTestSuite *populated = [XCTestSuite emptyTestSuiteForTestCaseClass:[XCTSuiteConstructionPlainFixture class]];
+    [populated addTest:[[XCTSuiteConstructionPlainFixture alloc] init]];
+    ok("a suite with tests is included", [populated shouldIncludeWhenIncludingEmptySuites], nil);
+    ok("the test really landed in it", populated.tests.count == 1, nil);
+
+    // An empty case suite stands for a runnable class that contributed no tests,
+    // which is a filtering outcome rather than a fact about the platform, so it
+    // is dropped.
+    XCTestSuite *caseSuite = [XCTestSuite emptyTestSuiteForTestCaseClass:[XCTSuiteConstructionPlainFixture class]];
+    ok("the empty case suite is a case suite",
+       [caseSuite isKindOfClass:[XCTestCaseSuite class]], NSStringFromClass([caseSuite class]));
+    ok("an empty case suite is excluded", ![caseSuite shouldIncludeWhenIncludingEmptySuites], nil);
+
+    // An empty plain suite is what a class that cannot run here gets. It is
+    // kept: the report should say the class is present with nothing under it.
+    XCTestSuite *plainSuite = [XCTestSuite emptyTestSuiteForTestCaseClass:[XCTSuiteConstructionUnavailableFixture class]];
+    ok("the empty plain suite is not a case suite",
+       [plainSuite class] == [XCTestSuite class], NSStringFromClass([plainSuite class]));
+    ok("an empty plain suite is included", [plainSuite shouldIncludeWhenIncludingEmptySuites], nil);
+
+    // A suite with a setUp of its own is neither of those, and is dropped.
+    XCTestSuite *subclassSuite = [[XCTSuiteConstructionSuiteWithSetUpFixture alloc] initWithName:@"Subclass"];
+    ok("the subclass suite's setUp is its own",
+       [subclassSuite methodForSelector:@selector(setUp)] != [XCTestSuite instanceMethodForSelector:@selector(setUp)],
+       nil);
+    ok("an empty suite with its own setUp is excluded",
+       ![subclassSuite shouldIncludeWhenIncludingEmptySuites], nil);
+
+    // The comparison is by IMP on the object, not by kind: a case suite that has
+    // been given tests is included even though it is one.
+    ok("a case suite with tests is included", [populated shouldIncludeWhenIncludingEmptySuites], nil);
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
+    // First, because it asks what a freshly made context looks like, and the
+    // main thread's root context is shared by every section after this one.
+    testContext();
     testRuntimeFacts();
     testSwiftCounterparts();
     testNaming();
     testAvailability();
     testEmptySuite();
+    testEmptySuiteInclusion();
+    testCaseSuiteLifecycle();
     testActivityObservation();
     testActivityRecord();
-    testContext();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }

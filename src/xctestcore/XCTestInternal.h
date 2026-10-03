@@ -467,6 +467,16 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 /// runner's only entry point.
 - (void)removeTestsWithIdentifierInSet:(XCTTestIdentifierSet *)set;
 
+/// Whether this suite survives a run that was asked to include empty suites.
+///
+/// A suite with tests in it always does. Of the empty ones, only a plain
+/// XCTestSuite does: that is the suite a class which cannot run here gets, and
+/// naming it is the honest report -- the class is present, with nothing under
+/// it. An XCTestCaseSuite is dropped, because a class that is runnable but
+/// contributed no tests has nothing to show, and a subclass of XCTestSuite with
+/// a setUp of its own is dropped too.
+- (BOOL)shouldIncludeWhenIncludingEmptySuites;
+
 /// Sorts this suite's tests by -defaultExecutionOrderCompare:, then does the
 /// same for every child suite.
 - (void)_sortTestsUsingDefaultExecutionOrdering;
@@ -658,6 +668,18 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 
 - (void)_runActivityNamed:(NSString *)name
                     block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
+
+/// The same, reported as the framework's own activity rather than as one a test
+/// author asked for by name.
+///
+/// This is how a suite's own setUp and tearDown show up in a report: the name is
+/// the caller's to choose ("Suite Set Up"), but the type says the runner started
+/// it, so it is not mistaken for something the test wanted to see.
++ (void)runInternalActivityNamed:(NSString *)name
+                           block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
+
+- (void)runInternalActivityNamed:(NSString *)name
+                           block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
 
 @end
 

@@ -25,6 +25,11 @@
 // framework's own bookkeeping types precisely so a reader can tell them apart.
 static NSString *const XCActivityTypeUserCreated = @"com.apple.dt.xctest.activity-type.userCreated";
 
+// The type of an activity the framework started for its own reasons. The name
+// is what tells a reader that "Suite Set Up" was the runner's doing rather than
+// something a test asked to see.
+static NSString *const XCActivityTypeInternal = @"com.apple.dt.xctest.activity-type.internal";
+
 // The key the per-thread context stack is filed under in NSThread's dictionary.
 //
 // A thread dictionary rather than an ivar because a context belongs to the
@@ -354,10 +359,52 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
     [context _runActivityNamed:name type:type block:block];
 }
 
++ (void)runInternalActivityNamed:(NSString *)name
+                            block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block
+{
+    XCTContext *context = [self currentContextIfAvailable];
+    if (context == nil) {
+        // The reference reports this through NSAssertionHandler and carries on,
+        // rather than raising. Raising is this port's standing choice for an
+        // internal failure (see XCTContextRaiseAssertion above): it is the same
+        // condition either way, and a runner that has adopted no context has
+        // already lost the thread the activity belonged to.
+        //
+        // The wording is the reference's, including the method it names. That
+        // name is not a method on XCTContext even in the reference -- it is left
+        // over from an earlier spelling -- and is kept so a message read out of a
+        // report can be matched against the reference's.
+        XCTContextRaiseAssertion(@"runActivityNamed:inScope must be called from the main thread.",
+                                 @selector(runInternalActivityNamed:block:));
+    }
+    [context runInternalActivityNamed:name block:block];
+}
+
+- (void)runInternalActivityNamed:(NSString *)name
+                           block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block
+{
+    // Same shape as the untyped path, and different only in the type it reports:
+    // the activity is the framework's own, so a reader can tell it from one a
+    // test author asked for by name.
+    [self _runActivityNamed:name
+                        type:XCActivityTypeInternal
+                       block:^(id<XCTActivity> activity) {
+        if (activity != nil) {
+            block(activity);
+        }
+    }];
+}
+
 - (void)_runActivityNamed:(NSString *)name
                     block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block
 {
-    [self _runActivityNamed:name type:XCActivityTypeUserCreated block:block];
+    [self _runActivityNamed:name
+                        type:XCActivityTypeUserCreated
+                       block:^(id<XCTActivity> activity) {
+        if (activity != nil) {
+            block(activity);
+        }
+    }];
 }
 
 - (void)_runActivityNamed:(NSString *)name
