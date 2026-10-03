@@ -198,7 +198,8 @@ XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h \
 	src/xctestcore/XCTestExpectationInternal.h \
 	src/xctestcore/XCTestFoundationCompat.h \
 	src/xctestcore/XCTestInternal.h \
-	src/xctestcore/XCTestObservationInternal.h
+	src/xctestcore/XCTestObservationInternal.h \
+	src/xctestcore/XCTActivityRecordStack.h
 
 # One object per source, spelled out. A pattern rule would be shorter and would
 # not build under bmake, and the whole reason this project builds under both is
@@ -207,6 +208,7 @@ XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTest.o $(XCTESTCORE_OBJDIR)/XCTestS
 	$(XCTESTCORE_OBJDIR)/XCTestCase.o $(XCTESTCORE_OBJDIR)/XCTestRun.o \
 	$(XCTESTCORE_OBJDIR)/XCTestObservation.o $(XCTESTCORE_OBJDIR)/XCTestAssertions.o \
 	$(XCTESTCORE_OBJDIR)/XCActivityRecord.o \
+	$(XCTESTCORE_OBJDIR)/XCTActivityRecordStack.o \
 	$(XCTESTCORE_OBJDIR)/XCTestInternal.o $(XCTESTCORE_OBJDIR)/XCTestSupportTypes.o \
 	$(XCTESTCORE_OBJDIR)/XCTestMetrics.o \
 	$(XCTESTCORE_OBJDIR)/XCTestExpectation.o $(XCTESTCORE_OBJDIR)/XCTWaiter.o \
@@ -307,6 +309,9 @@ $(XCTESTCORE_OBJDIR)/XCTestObservation.o: src/xctestcore/XCTestObservation.m $(X
 
 $(XCTESTCORE_OBJDIR)/XCActivityRecord.o: src/xctestcore/XCActivityRecord.m $(XCTEST_FW_HEADERS) src/xctestcore/include/XCTestCore/XCActivityRecord.h
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCActivityRecord.m
+
+$(XCTESTCORE_OBJDIR)/XCTActivityRecordStack.o: src/xctestcore/XCTActivityRecordStack.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTActivityRecordStack.h src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTActivityRecordStack.m
 $(XCTESTCORE_OBJDIR)/XCTestAssertions.o: src/xctestcore/XCTestAssertions.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestAssertionFormats.h
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestAssertions.m

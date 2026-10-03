@@ -141,6 +141,26 @@ static NSString *const XCActivityRecordDefaultAggregationIdentifier = @"Other";
     _subactivitiesDuration += duration;
 }
 
+#pragma mark - Signposts
+
+@synthesize signpostId = _signpostId;
+
+- (void)publishAssociatedSignpostStartEvent
+{
+    // The reference checks this same sentinel before emitting anything. Until a
+    // run has actually assigned a signpost id there is no signpost to publish
+    // against, so this returns without doing work -- which is why the record
+    // stack can call it unconditionally rather than the run deciding first.
+    if (_signpostId == NSUIntegerMax) {
+        return;
+    }
+
+    // Emitting the event itself is deferred to the signpost work that will assign
+    // identifiers. Until then the no-signpost configuration is the only one that
+    // can be reached, so there is nothing to publish and the guard above is the
+    // whole behaviour. See -signpostId.
+}
+
 #pragma mark - Attachments
 
 // The getter is hand-written so the lock is taken, which suppresses

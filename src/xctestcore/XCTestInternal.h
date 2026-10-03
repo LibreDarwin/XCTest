@@ -521,6 +521,23 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 
 @end
 
+/// The part of XCTContext's interface that is private to the framework.
+///
+/// Deliberately a category rather than an addition to the public
+/// <XCTest/XCTContext.h>: the reference does not publish this, and it is not
+/// meaningful to a test author. `isAncillaryContext` in particular is read by the
+/// activity record stack to decide whether an activity found above the one being
+/// finished may be unwound on its behalf.
+@interface XCTContext (XCTInternalContext)
+
+/// YES when this context's activities exist only to carry something the reader
+/// is expected to have -- an intermediate step, not a unit of work. Ancillary
+/// activities are the ones a finish call may unwind implicitly, because
+/// unwinding them cannot lose work that was meant to be reported.
+@property (getter=isAncillaryContext) BOOL isAncillaryContext;
+
+@end
+
 NS_ASSUME_NONNULL_END
 
 #endif /* XCTEST_XCTESTINTERNAL_H */

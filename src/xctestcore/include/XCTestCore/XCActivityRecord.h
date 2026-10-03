@@ -111,6 +111,19 @@ typedef double XCTActivityDuration;
 /// YES when the activity carried context the reader is expected to have.
 @property BOOL hasAncillaryContext;
 
+/// Signpost identifier for this activity, or NSUIntegerMax when the run is not
+/// emitting signposts. Assigned by the machinery that decides whether to signpost
+/// at all; never set by hand.
+@property NSUInteger signpostId;
+
+/// Emits the signpost event that marks this activity starting.
+///
+/// A no-op unless a signpost identifier has been assigned, which is what makes
+/// it safe to call unconditionally: a run that is not tracing pays a load and a
+/// compare, and a run that is tracing gets the event. The record stack calls this
+/// as the activity is pushed, before observers are told about the start.
+- (void)publishAssociatedSignpostStartEvent;
+
 /// Groups sibling activities for aggregation. Consumers key aggregation off
 /// this, so an absent identifier leaves the record ungrouped. The reference
 /// initialises it to the literal @"Other" rather than to nil -- an unnamed record
