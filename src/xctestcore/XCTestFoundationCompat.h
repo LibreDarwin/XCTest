@@ -152,6 +152,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setArray:(NSArray<ObjectType> *)array;
 @end
 
+// Clearing a dictionary wholesale, which the reduced NSMutableDictionary.h omits.
+// XCTContext does it when a context is invalidated: the associations a context
+// was carrying are meaningless once it has ended, and dropping them one by one
+// would be both slower and easier to get wrong. A probe confirms the runtime
+// implements it.
+@interface NSMutableDictionary<KeyType, ObjectType> (XCTSDKCompat)
+- (void)removeAllObjects;
+@end
+
 // Set filtering the reduced NSSet.h omits. A probe confirms the runtime
 // implements it. Class discovery is the caller: it drops the framework's own
 // test-case subclasses from a discovered set by image path.

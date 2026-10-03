@@ -637,6 +637,160 @@ void testActivityRecord(void)
        record.attachments.count == 1, nil);
 }
 
+
+// The context an activity is reported into. Its job is to own the stack of what
+// is running right now, and to be reachable from the code that is running it --
+// which means the thread has to be able to find it, and a nested activity has to
+// land in the same report the surrounding one goes into.
+static void testContext(void)
+{
+    printf("\nXCTContext\n");
+
+    XCTestObservationCenter *center = [XCTestObservationCenter sharedTestObservationCenter];
+    ActivityObserverFixture *observer = [[ActivityObserverFixture alloc] init];
+    [center addTestObserver:observer];
+
+    // A context cannot be made with -init, so the only way to get one is to ask
+    // for the running one. On the main thread, where nothing is running yet,
+    // that means one is created and adopted.
+    XCTContext *context = [XCTContext currentContextIfAvailable];
+    ok("a context is available on the main thread", context != nil, nil);
+    ok("asking again returns the same context",
+       [XCTContext currentContextIfAvailable] == context, nil);
+    ok("+hasCurrentContext agrees", [XCTContext hasCurrentContext], nil);
+    ok("+currentContext agrees", [XCTContext currentContext] == context, nil);
+
+    ok("a new context is valid", [context isValid], nil);
+    ok("a new context starts at depth zero", context.activityRecordStackDepth == 0, nil);
+    ok("a new context has no top activity", context.topActivity == nil, nil);
+    ok("a new context has aggregated nothing",
+       context.aggregationRecords.count == 0, nil);
+    ok("a new context has a start date", context.startDate != nil, nil);
+    ok("a new context has no parent", context.parent == nil, nil);
+    ok("a new context is not the reporting base", !context.isReportingBase, nil);
+    ok("a new context is not ancillary", !context.isAncillaryContext, nil);
+    ok("a new context is bound to the thread that made it",
+       [context isBoundToCurrentThread], nil);
+    ok("a new context is reachable from itself", context.associatedContexts.count > 0, nil);
+
+    // The activity path: a name becomes a record, the record is on top while the
+    // block runs, and it is off the stack once the block returns.
+    XCActivityRecord *started = [context willStartActivityWithTitle:@"one" type:@"test.type"];
+    ok("starting an activity makes one", started != nil, nil);
+    ok("the activity has the name it was given", [started.name isEqualToString:@"one"], nil);
+    ok("the activity has the type it was given",
+       [started.activityType isEqualToString:@"test.type"], nil);
+    ok("the started activity is on top", context.topActivity == started, nil);
+    ok("the stack is one deep", context.activityRecordStackDepth == 1, nil);
+    ok("the activity is still valid", started.isValid, nil);
+    ok("an activity reports its start to a private observer",
+       observer.startCount == 1, nil);
+    ok("the observer is handed the context it ran in",
+       observer.startContext == context, nil);
+    ok("the observer is handed the activity",
+       observer.startActivity == started, nil);
+
+    XCActivityRecord *inner = [context willStartActivityWithTitle:@"two" type:@"test.type"];
+    ok("a nested activity goes on top", context.topActivity == inner, nil);
+    ok("a nested activity makes the stack deeper", context.activityRecordStackDepth == 2, nil);
+    ok("a nested activity records its parent", inner.parentID != nil, nil);
+    ok("the parent is the record it was started inside",
+       [inner.parentID isEqual:started.uuid], nil);
+
+    [context didFinishActivity:inner];
+    ok("finishing pops back to the outer activity", context.topActivity == started, nil);
+    ok("a finished activity is invalid", !inner.isValid, nil);
+    ok("a finished activity has a duration", inner.duration >= 0.0, nil);
+    ok("the finish is reported", observer.finishCount == 1, nil);
+    ok("the finished activity reports itself", observer.finishActivity == inner, nil);
+
+    [context didFinishActivity:started];
+    ok("finishing the last activity empties the stack", context.activityRecordStackDepth == 0, nil);
+    ok("an empty stack has no top activity", context.topActivity == nil, nil);
+    ok("aggregation is recorded once something has run",
+       context.aggregationRecords.count > 0, nil);
+
+    // Unwinding: a context that is abandoned with activities still running must
+    // still finish them, or they stay open for the rest of the run.
+    [context willStartActivityWithTitle:@"dangling" type:@"test.type"];
+    [context willStartActivityWithTitle:@"also dangling" type:@"test.type"];
+    ok("two activities are running before the unwind",
+       context.activityRecordStackDepth == 2, nil);
+    [context unwindRemainingActivities];
+    ok("unwinding empties the stack", context.activityRecordStackDepth == 0, nil);
+
+    // Associated state and tear-down.
+    [context setAssociatedObject:@"value" forKey:@"key"];
+    ok("an associated value reads back", [[context associatedObjectForKey:@"key"] isEqualToString:@"value"], nil);
+    ok("an unknown key finds nothing", [context associatedObjectForKey:@"missing"] == nil, nil);
+
+    __block BOOL toreDown = NO;
+    [context addTearDownBlock:^{ toreDown = YES; }];
+    ok("a tear-down block does not run yet", !toreDown, nil);
+    [context invalidate];
+    ok("invalidating runs the tear-down block", toreDown, nil);
+    ok("invalidating makes the context invalid", ![context isValid], nil);
+    ok("invalidating clears associated values",
+       [context associatedObjectForKey:@"key"] == nil, nil);
+
+    __block NSUInteger secondInvalidate = 0;
+    [context invalidate];
+    secondInvalidate++;
+    ok("invalidating again does nothing", secondInvalidate == 1 && toreDown, nil);
+
+    // The public entry point. This is the whole of what a test author has, so
+    // what matters is that the activity is reported under the name they gave,
+    // that it is finished even if the block throws, and that nothing is left on
+    // the stack afterwards.
+    __block NSUInteger startsBefore = observer.startCount;
+    __block NSString *reportedName = nil;
+    __block NSString *reportedType = nil;
+    __block BOOL sawActivity = NO;
+
+    XCTContext *before = [XCTContext currentContextIfAvailable];
+    NSUInteger depthBefore = before.activityRecordStackDepth;
+
+    [XCTContext runActivityNamed:@"public activity" block:^(id<XCTActivity> activity) {
+        sawActivity = YES;
+        reportedName = activity.name;
+        // The block runs inside the activity, so the activity is on top of the
+        // stack for as long as it runs.
+        reportedType = ((XCActivityRecord *)activity).activityType;
+        ok("the activity is on top while its block runs",
+           before.topActivity == (XCActivityRecord *)activity, nil);
+        ok("the stack is one deeper while its block runs",
+           before.activityRecordStackDepth == depthBefore + 1, nil);
+    }];
+
+    ok("the block is given the activity", sawActivity, nil);
+    ok("the activity carries the name that was asked for",
+       [reportedName isEqualToString:@"public activity"], nil);
+    ok("a user-created activity has the user-created type",
+       [reportedType isEqualToString:@"com.apple.dt.xctest.activity-type.userCreated"], nil);
+    ok("the activity is reported", observer.startCount == startsBefore + 1, nil);
+    ok("the stack is back to where it was", before.activityRecordStackDepth == depthBefore, nil);
+
+    // A block that throws has still finished. If it had not, the activity would
+    // stay open and every later finish would be one record out of step with it.
+    __block NSUInteger depthAfterThrow = 0;
+    @try {
+        [XCTContext runActivityNamed:@"throwing activity" block:^(id<XCTActivity> activity) {
+            (void)activity;
+            depthAfterThrow = before.activityRecordStackDepth;
+            [NSException raise:NSGenericException format:@"from inside the activity"];
+        }];
+        ok("a throwing block propagates its exception", NO, nil);
+    } @catch (NSException *exception) {
+        ok("a throwing block propagates its exception", YES, nil);
+    }
+    ok("the activity was running when the block threw",
+       depthAfterThrow == depthBefore + 1, nil);
+    ok("a throwing block still leaves nothing running",
+       before.activityRecordStackDepth == depthBefore, nil);
+
+    [center removeTestObserver:observer];
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
@@ -647,6 +801,7 @@ int main(void)
     testEmptySuite();
     testActivityObservation();
     testActivityRecord();
+    testContext();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }

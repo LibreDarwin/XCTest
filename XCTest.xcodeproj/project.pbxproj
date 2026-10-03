@@ -14,9 +14,8 @@
 		1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000101 /* XCTestSuite.m */; };
 		1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000102 /* XCTestCase.m */; };
 		1A2B3C4E0000000000000123 /* XCTestRun.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000103 /* XCTestRun.m */; };
-		1A2B3C4E00000000000000E6 /* XCActivityRecord.m in Sources */
-		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m in Sources */ in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C6 /* XCActivityRecord.m in Sources */
-		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m in Sources */ */; };
+		1A2B3C4E00000000000000E6 /* XCActivityRecord.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C6 /* XCActivityRecord.m */; };
+		1ACFB3A523F70A0000123458 /* XCTActivityRecordStack.m in Sources */ = {isa = PBXBuildFile; fileRef = 1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m */; };
 		1A2B3C4E0000000000000124 /* XCTestObservation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000104 /* XCTestObservation.m */; };
 		1A2B3C4E0000000000000125 /* XCTestAssertions.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000105 /* XCTestAssertions.m */; };
 		1A2B3C4E0000000000000126 /* XCTestInternal.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000106 /* XCTestInternal.m */; };
@@ -32,8 +31,9 @@
 		1A2B3C4E0000000000000130 /* XCTestConfigurationLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000110 /* XCTestConfigurationLoader.m */; };
 		1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C0 /* XCTestConfiguration.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000E1 /* XCTestConfigurationLoader.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C1 /* XCTestConfigurationLoader.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1A2B3C4E00000000000000E5 /* XCActivityRecord.h in Headers */
-		1ACFB3A123F70A0000123459 /* XCTActivityRecordStack.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C5 /* XCActivityRecord.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1A2B3C4E00000000000000E5 /* XCActivityRecord.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C5 /* XCActivityRecord.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		1ACFB3A123F70A0000123459 /* XCTActivityRecordStack.h in Headers */ = {isa = PBXBuildFile; fileRef = 1ACFB3A123F70A0000123458 /* XCTActivityRecordStack.h */; settings = {ATTRIBUTES = (Project, ); }; };
+		1ACFB3A223F70A000012345A /* XCTContext.m in Sources */ = {isa = PBXBuildFile; fileRef = 1ACFB3A223F70A000012345B /* XCTContext.m */; };
 		1A2B3C4E00000000000000E2 /* XCTTestSelection.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C2 /* XCTTestSelection.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000E4 /* XCTTestRunSession.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C4 /* XCTTestRunSession.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A2B3C4E00000000000000E3 /* XCTestCore.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C3 /* XCTestCore.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -106,9 +106,10 @@
 		1A2B3C4E0000000000000101 /* XCTestSuite.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSuite.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000102 /* XCTestCase.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestCase.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000103 /* XCTestRun.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestRun.m; sourceTree = "<group>"; };
-		1A2B3C4E00000000000000C6 /* XCActivityRecord.m in Sources */
-		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m in Sources */ */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCActivityRecord.m in Sources */
-		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m in Sources */; sourceTree = "<group>"; };
+		1A2B3C4E00000000000000C6 /* XCActivityRecord.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCActivityRecord.m; sourceTree = "<group>"; };
+		1ACFB3A123F70A0000123458 /* XCTActivityRecordStack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTActivityRecordStack.h; sourceTree = "<group>"; };
+		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTActivityRecordStack.m; sourceTree = "<group>"; };
+		1ACFB3A223F70A000012345B /* XCTContext.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTContext.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000104 /* XCTestObservation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestObservation.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000105 /* XCTestAssertions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestAssertions.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000106 /* XCTestInternal.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestInternal.m; sourceTree = "<group>"; };
@@ -219,8 +220,8 @@
 			files = (
 				1A2B3C4E00000000000000E0 /* XCTestConfiguration.h in Headers */,
 				1A2B3C4E00000000000000E1 /* XCTestConfigurationLoader.h in Headers */,
-				1A2B3C4E00000000000000E5 /* XCActivityRecord.h in Headers */
-		1ACFB3A123F70A0000123459 /* XCTActivityRecordStack.h in Headers */,
+				1A2B3C4E00000000000000E5 /* XCActivityRecord.h in Headers */,
+				1ACFB3A123F70A0000123459 /* XCTActivityRecordStack.h in Headers */,
 				1A2B3C4E00000000000000E2 /* XCTTestSelection.h in Headers */,
 				1A2B3C4E00000000000000E4 /* XCTTestRunSession.h in Headers */,
 				1A2B3C4E00000000000000E3 /* XCTestCore.h in Headers */,
@@ -318,8 +319,10 @@
 				1A2B3C4E0000000000000101 /* XCTestSuite.m */,
 				1A2B3C4E0000000000000102 /* XCTestCase.m */,
 				1A2B3C4E0000000000000103 /* XCTestRun.m */,
-				1A2B3C4E00000000000000C6 /* XCActivityRecord.m in Sources */
-		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m in Sources */ */,
+				1A2B3C4E00000000000000C6 /* XCActivityRecord.m */,
+				1ACFB3A123F70A0000123458 /* XCTActivityRecordStack.h */,
+				1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m */,
+				1ACFB3A223F70A000012345B /* XCTContext.m */,
 				1A2B3C4E0000000000000104 /* XCTestObservation.m */,
 				1A2B3C4E0000000000000105 /* XCTestAssertions.m */,
 				1A2B3C4E0000000000000106 /* XCTestInternal.m */,
@@ -717,8 +720,9 @@
 				1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */,
 				1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */,
 				1A2B3C4E0000000000000123 /* XCTestRun.m in Sources */,
-				1A2B3C4E00000000000000E6 /* XCActivityRecord.m in Sources */
-		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m in Sources */ in Sources */,
+				1A2B3C4E00000000000000E6 /* XCActivityRecord.m in Sources */,
+				1ACFB3A523F70A0000123458 /* XCTActivityRecordStack.m in Sources */,
+				1ACFB3A223F70A000012345A /* XCTContext.m in Sources */,
 				1A2B3C4E0000000000000124 /* XCTestObservation.m in Sources */,
 				1A2B3C4E0000000000000125 /* XCTestAssertions.m in Sources */,
 				1A2B3C4E0000000000000126 /* XCTestInternal.m in Sources */,

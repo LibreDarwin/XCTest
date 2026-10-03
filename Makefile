@@ -209,6 +209,7 @@ XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTest.o $(XCTESTCORE_OBJDIR)/XCTestS
 	$(XCTESTCORE_OBJDIR)/XCTestObservation.o $(XCTESTCORE_OBJDIR)/XCTestAssertions.o \
 	$(XCTESTCORE_OBJDIR)/XCActivityRecord.o \
 	$(XCTESTCORE_OBJDIR)/XCTActivityRecordStack.o \
+	$(XCTESTCORE_OBJDIR)/XCTContext.o \
 	$(XCTESTCORE_OBJDIR)/XCTestInternal.o $(XCTESTCORE_OBJDIR)/XCTestSupportTypes.o \
 	$(XCTESTCORE_OBJDIR)/XCTestMetrics.o \
 	$(XCTESTCORE_OBJDIR)/XCTestExpectation.o $(XCTESTCORE_OBJDIR)/XCTWaiter.o \
@@ -312,6 +313,9 @@ $(XCTESTCORE_OBJDIR)/XCActivityRecord.o: src/xctestcore/XCActivityRecord.m $(XCT
 
 $(XCTESTCORE_OBJDIR)/XCTActivityRecordStack.o: src/xctestcore/XCTActivityRecordStack.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTActivityRecordStack.h src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTActivityRecordStack.m
+
+$(XCTESTCORE_OBJDIR)/XCTContext.o: src/xctestcore/XCTContext.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTActivityRecordStack.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTContext.m
 $(XCTESTCORE_OBJDIR)/XCTestAssertions.o: src/xctestcore/XCTestAssertions.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestAssertionFormats.h
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestAssertions.m

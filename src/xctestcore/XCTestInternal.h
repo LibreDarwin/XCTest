@@ -9,6 +9,11 @@
 
 #import <XCTest/XCTest.h>
 
+// The activity record and the stack a context runs them in. The record header
+// is a public XCTestCore header; the stack is private to the framework.
+#import <XCTestCore/XCActivityRecord.h>
+#import "XCTActivityRecordStack.h"
+
 // The Internal SDK ships no <execinfo.h>: backtrace() and
 // backtrace_symbols() live in libSystem, but their declarations ride along in
 // that header, which is absent. They are ordinary BSD functions and are
@@ -47,8 +52,11 @@ XCT_EXPORT NSString *_XCTClassNameWithoutModuleFromClass(Class cls);
 @class XCTIssue;
 @class XCTExpectedFailure;
 @class XCTExpectedFailureOptions;
+@class XCTIdentifier;
 @class XCTTestIdentifier;
 @class XCTTestIdentifierSet;
+@class XCTestCase;
+@class XCTestObservationCenter;
 
 /// A source of arbitrary unsigned numbers, supplied by the runner so a run can
 /// be made reproducible from a seed. A block rather than an object because the
@@ -525,9 +533,7 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 ///
 /// Deliberately a category rather than an addition to the public
 /// <XCTest/XCTContext.h>: the reference does not publish this, and it is not
-/// meaningful to a test author. `isAncillaryContext` in particular is read by the
-/// activity record stack to decide whether an activity found above the one being
-/// finished may be unwound on its behalf.
+/// meaningful to a test author.
 @interface XCTContext (XCTInternalContext)
 
 /// YES when this context's activities exist only to carry something the reader
@@ -535,6 +541,146 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 /// activities are the ones a finish call may unwind implicitly, because
 /// unwinding them cannot lose work that was meant to be reported.
 @property (getter=isAncillaryContext) BOOL isAncillaryContext;
+
+/// YES for the context that activities are reported against, rather than one
+/// that exists only to nest inside another. A run has exactly one of these, and
+/// aggregation is measured from it.
+@property (getter=isReportingBase) BOOL isReportingBase;
+
+/// Creates a context nested in `parent` and associated with `testCase`.
+///
+/// Both are nullable: a root context has no parent, and a context created
+/// outside a test case -- the public +runActivityNamed:block: path -- has no
+/// test case.
+- (instancetype)initWithParent:(nullable XCTContext *)parent
+                      testCase:(nullable XCTestCase *)testCase;
+
+/// Ends the context's scope: runs the tear-down blocks that were added to it and
+/// clears what it was carrying.
+///
+/// Idempotent, because a context that unwinds normally is often invalidated
+/// again by the path that owns it.
+- (void)invalidate;
+
+/// The stack of activities running in this context. Owns it; nil only before
+/// -init has run.
+@property (readonly, strong) XCTActivityRecordStack *activityRecordStack;
+
+/// The stack this context contributes to, reached through this context and every
+/// context it is nested in.
+///
+/// Reported from the outermost context rather than the innermost so that a
+/// consumer can tell how deep a run is overall, not just how deep this one part
+/// of it is.
+@property (readonly) NSUInteger transitiveActivityRecordStackDepth;
+
+/// Every context this one is reachable from on the current thread, innermost
+/// first: the contexts already running here, followed by this one's ancestors.
+@property (readonly, copy) NSArray<XCTContext *> *associatedContexts;
+
+/// YES when this context is running on the thread it was started on.
+@property (readonly) BOOL isBoundToCurrentThread;
+
+/// The nearest enclosing context marked as the reporting base, or nil when there
+/// is none on this thread.
+@property (readonly, nullable) XCTContext *reportingBaseContext;
+
+/// Starts an activity in this context and returns the record for it.
+- (XCActivityRecord *)willStartActivityWithTitle:(NSString *)title
+                                            type:(NSString *)type;
+- (XCActivityRecord *)willStartActivityWithTitle:(NSString *)title
+                                            type:(NSString *)type
+                                       startTime:(nullable NSDate *)startTime;
+
+/// Finishes an activity started in this context.
+- (void)didFinishActivity:(XCActivityRecord *)activity;
+- (void)didFinishActivity:(XCActivityRecord *)activity
+               finishTime:(nullable NSDate *)finishTime;
+
+/// Finishes everything still running in this context, innermost first.
+- (void)unwindRemainingActivities;
+
+/// How many activities are running in this context.
+@property (readonly) NSUInteger activityRecordStackDepth;
+
+/// The innermost activity running here, or nil.
+@property (readonly, nullable) XCActivityRecord *topActivity;
+
+/// Timing rolled up per aggregation group across everything this context has run.
+@property (readonly, copy) NSDictionary<NSString *, id> *aggregationRecords;
+
+/// Values the context carries for its own use, keyed by string.
+- (nullable id)associatedObjectForKey:(NSString *)key;
+- (void)setAssociatedObject:(nullable id)value forKey:(NSString *)key;
+
+/// Blocks to run when the context is invalidated.
+- (void)addTearDownBlock:(XCT_NOESCAPE void (^)(void))block;
+
+/// The context this one is nested in, or nil for a root.
+@property (readonly, nullable) XCTContext *parent;
+
+/// YES until the context is invalidated.
+///
+/// A finished activity is what a reader normally asks about; this is the same
+/// question one level up, asked about everything the context started.
+@property (readonly) BOOL isValid;
+
+/// When the context was created, which is what the outermost activity's duration
+/// is measured from.
+@property (readonly, copy) NSDate *startDate;
+
+/// The test case this context belongs to, or nil when it was created outside one.
+@property (readonly, weak, nullable) XCTestCase *testCase;
+
+/// The observer registry to report this context's activities to.
+@property (readonly) XCTestObservationCenter *observationCenter;
+
+/// The innermost context running on this thread, or nil.
+///
+/// On the main thread a root context is created and adopted when there is none,
+/// because that is the normal state before any test has started. On any other
+/// thread nil means what it says: nothing is running here.
++ (nullable XCTContext *)currentContextIfAvailable;
+
+/// YES when a context is running on this thread.
++ (BOOL)hasCurrentContext;
+
+/// The innermost context running on this thread. Raises rather than returning
+/// nil: every caller needs one, and a nil here would only surface later, further
+/// from the thread that lost it.
++ (XCTContext *)currentContext;
+
+/// Starts a typed activity in this context and runs `block` inside it, handing
+/// `block` the record so it can attach to the activity that is reporting it.
+- (void)_runActivityNamed:(NSString *)name
+                    type:(NSString *)type
+                   block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
+
+- (void)_runActivityNamed:(NSString *)name
+                    block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
+
+@end
+
+/// The thread-local stack of contexts currently running on a thread.
+///
+/// This is what makes a context reachable from code that was handed only an
+/// activity: the activity names the context, and the context names the thread.
+@interface XCTest (XCTObservationCenterInternal)
+
+/// The observation registry this run reports through.
+///
+/// Memoized rather than returning the shared center fresh each time, so a
+/// context that asks on every activity resolves the same object every time and
+/// an observer added mid-run is not seen through one call and missed through
+/// another.
+- (XCTestObservationCenter *)_xct_observationCenter;
+
+@end
+
+@interface NSThread (XCTContext)
+
+/// The contexts running on this thread, outermost first.
+@property (readonly, strong) NSMutableArray<XCTContext *> *xct_contextStack;
 
 @end
 

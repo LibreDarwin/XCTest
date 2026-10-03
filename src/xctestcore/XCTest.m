@@ -19,6 +19,22 @@
 @implementation XCTest {
     NSString *_name;
     XCTestRun *_testRun;
+    XCTestObservationCenter *_xct_observationCenter;
+}
+
+#pragma mark - Observation
+
+- (XCTestObservationCenter *)_xct_observationCenter
+{
+    // Synchronized because two activities starting at once on two threads both
+    // come through here, and both would otherwise create a registry and one of
+    // them would report to a registry no observer ever registered with.
+    @synchronized(self) {
+        if (_xct_observationCenter == nil) {
+            _xct_observationCenter = [XCTestObservationCenter sharedTestObservationCenter];
+        }
+        return _xct_observationCenter;
+    }
 }
 
 #pragma mark - Identity

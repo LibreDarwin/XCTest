@@ -22,6 +22,8 @@
 @class XCTestObservationCenter;
 @class XCTContext;
 
+NS_ASSUME_NONNULL_BEGIN
+
 /// Running totals for one aggregation group.
 ///
 /// A group is named by -[XCActivityRecord aggregationIdentifier], and the two
@@ -107,5 +109,7 @@
 - (nullable XCActivityRecord *)topActivity;
 
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif /* XCTACTIVITYRECORDSTACK_H */
