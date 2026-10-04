@@ -632,6 +632,45 @@ static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
     return firstArgumentType[0] == '^' && firstArgumentType[1] == '@';
 }
 
++ (BOOL)isValidTestMethodUsingAsyncConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                    returnType:(char)returnType
+                                          blockArgumentCount:(NSUInteger)blockArgumentCount
+                                               blockReturnType:(char)blockReturnType
+                                     blockFirstArgumentClass:(Class)blockFirstArgumentClass
+                                                    isThrowing:(BOOL *)isThrowing
+{
+    // A test that reports through a completion handler takes only self and
+    // _cmd plus the handler, and yields no result. The handler itself also
+    // yields no result -- whoever calls it does the waiting -- so a handler
+    // that returned a value would be a different shape.
+    if (argumentCount != 3 || returnType != 'v' || blockReturnType != 'v') {
+        return NO;
+    }
+    // The handler's arguments decide how failures are reported, and both
+    // accepted shapes are told apart by their first argument: a handler
+    // taking nothing completes unconditionally, while one taking an NSError
+    // completes with the outcome.
+    if (blockArgumentCount == 1 && blockFirstArgumentClass == Nil) {
+        if (isThrowing != NULL) {
+            *isThrowing = NO;
+        }
+        return YES;
+    }
+    // Compared as a class rather than by name so that a subclass of NSError
+    // is not accepted: only NSError itself is the documented shape.
+    if (blockArgumentCount == 2 && blockFirstArgumentClass == [NSError class]) {
+        if (isThrowing != NULL) {
+            *isThrowing = YES;
+        }
+        return YES;
+    }
+    // A caller that only wants the yes/no does not have to supply isThrowing,
+    // and one that supplies it has it written only where it is actually known
+    // -- a rejected method leaves it alone, so a stale NO is never mistaken
+    // for a verdict this predicate reached.
+    return NO;
+}
+
 + (NSArray<NSInvocation *> *)testInvocations
 {
     NSMutableDictionary<NSString *, NSValue *> *selectorsByName = [NSMutableDictionary dictionary];

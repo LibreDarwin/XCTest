@@ -383,6 +383,12 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 + (BOOL)isValidTestMethodUsingErrorConventionWithArgumentCount:(NSUInteger)argumentCount
                                                      returnType:(char)returnType
                                              firstArgumentType:(const char *)firstArgumentType;
++ (BOOL)isValidTestMethodUsingAsyncConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                    returnType:(char)returnType
+                                          blockArgumentCount:(NSUInteger)blockArgumentCount
+                                               blockReturnType:(char)blockReturnType
+                                     blockFirstArgumentClass:(Class _Nullable)blockFirstArgumentClass
+                                                    isThrowing:(nullable BOOL *)isThrowing;
 @end
 
 /// A discovered test method, as the pieces needed to run it.

@@ -79,6 +79,24 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 }
 @end
 
+// An NSError subclass, to pin that the async predicate accepts only NSError
+// itself and not anything shaped like it.
+@interface XCTSuiteConstructionErrorSubclass : NSError
+@end
+@implementation XCTSuiteConstructionErrorSubclass
+@end
+
+// A test written with a completion handler, which is the async convention.
+@interface XCTSuiteConstructionAsyncFixture : XCTestCase
+- (void)testReportsThroughAHandler:(void (^)(void))handler;
+@end
+@implementation XCTSuiteConstructionAsyncFixture
+- (void)testReportsThroughAHandler:(void (^)(void))handler
+{
+    handler();
+}
+@end
+
 // Supplies its own +defaultTestSuite, the path that lets a class decide what its
 // suite contains without the invocations being scanned.
 @interface XCTSuiteConstructionDefaultSuiteFixture : XCTestCase
@@ -459,6 +477,106 @@ static void testMethodConventions(void)
        [[[XCTSuiteConstructionPlainFixture class] testInvocations] count] > 0, nil);
     ok("discovery leaves the error convention out until it can be run",
        [[[XCTSuiteConstructionErrorConventionFixture class] testInvocations] count] == 0, nil);
+
+    // Async: the method yields nothing and takes a completion handler, and the
+    // handler's own shape says whether it can report a failure.
+    ok("async accepts a handler that reports no error",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                            returnType:'v'
+                                                      blockArgumentCount:1
+                                                       blockReturnType:'v'
+                                             blockFirstArgumentClass:Nil
+                                                            isThrowing:NULL], nil);
+    ok("async accepts a handler that reports an error",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                            returnType:'v'
+                                                      blockArgumentCount:2
+                                                       blockReturnType:'v'
+                                             blockFirstArgumentClass:[NSError class]
+                                                            isThrowing:NULL], nil);
+    ok("async rejects a method with a second argument",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:4
+                                                             returnType:'v'
+                                                       blockArgumentCount:1
+                                                        blockReturnType:'v'
+                                              blockFirstArgumentClass:Nil
+                                                             isThrowing:NULL], nil);
+    ok("async rejects a method that returns a value",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                             returnType:'i'
+                                                       blockArgumentCount:1
+                                                        blockReturnType:'v'
+                                              blockFirstArgumentClass:Nil
+                                                             isThrowing:NULL], nil);
+    ok("async rejects a handler that returns a value",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                             returnType:'v'
+                                                       blockArgumentCount:1
+                                                        blockReturnType:'B'
+                                              blockFirstArgumentClass:Nil
+                                                             isThrowing:NULL], nil);
+    ok("async rejects a handler that takes something other than an error",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                             returnType:'v'
+                                                       blockArgumentCount:2
+                                                        blockReturnType:'v'
+                                              blockFirstArgumentClass:[NSObject class]
+                                                             isThrowing:NULL], nil);
+    ok("async rejects a handler with too many arguments",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                             returnType:'v'
+                                                       blockArgumentCount:3
+                                                        blockReturnType:'v'
+                                              blockFirstArgumentClass:[NSError class]
+                                                             isThrowing:NULL], nil);
+    // Only NSError itself is the documented shape, so a subclass is not one.
+    ok("async rejects an error subclass as the handler argument",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                             returnType:'v'
+                                                       blockArgumentCount:2
+                                                        blockReturnType:'v'
+                                              blockFirstArgumentClass:[XCTSuiteConstructionErrorSubclass class]
+                                                             isThrowing:NULL], nil);
+    // The throwing-ness is an answer, so it is written on the accepting paths
+    // and only there.
+    BOOL isThrowing = YES;
+    ok("a handler that reports no error is not throwing",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                            returnType:'v'
+                                                      blockArgumentCount:1
+                                                       blockReturnType:'v'
+                                             blockFirstArgumentClass:Nil
+                                                            isThrowing:&isThrowing] && !isThrowing, nil);
+    isThrowing = NO;
+    ok("a handler that reports an error is throwing",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                            returnType:'v'
+                                                      blockArgumentCount:2
+                                                       blockReturnType:'v'
+                                             blockFirstArgumentClass:[NSError class]
+                                                            isThrowing:&isThrowing] && isThrowing, nil);
+    // A rejected method never reaches a verdict, so it must not overwrite an
+    // answer the caller already had.
+    isThrowing = YES;
+    ok("a rejected method leaves the throwing answer alone",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                             returnType:'i'
+                                                       blockArgumentCount:1
+                                                        blockReturnType:'v'
+                                              blockFirstArgumentClass:Nil
+                                                             isThrowing:&isThrowing] && isThrowing, nil);
+    // Asking only the yes/no is legitimate, so the pointer is optional.
+    ok("the throwing answer can be declined",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                            returnType:'v'
+                                                      blockArgumentCount:1
+                                                       blockReturnType:'v'
+                                             blockFirstArgumentClass:Nil
+                                                            isThrowing:NULL], nil);
+    // Discovery still runs only what it can invoke, so an async method is not
+    // yet handed to a caller that would not know to wait for it.
+    ok("discovery still leaves the async convention out until it can be run",
+       [[[XCTSuiteConstructionAsyncFixture class] testInvocations] count] == 0, nil);
 }
 
 #pragma mark - Invocation descriptors
