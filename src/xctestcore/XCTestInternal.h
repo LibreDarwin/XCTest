@@ -12,6 +12,7 @@
 // The activity record and the stack a context runs them in. The record header
 // is a public XCTestCore header; the stack is private to the framework.
 #import <XCTestCore/XCActivityRecord.h>
+#import <XCTestCore/XCTestConfiguration.h>
 #import "XCTActivityRecordStack.h"
 
 // The Internal SDK ships no <execinfo.h>: backtrace() and
@@ -662,9 +663,15 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 
 /// Starts a typed activity in this context and runs `block` inside it, handing
 /// `block` the record so it can attach to the activity that is reporting it.
+///
+/// `activity` is nullable, and that is the contract rather than an oversight: a
+/// run that does not report activities of this type still runs `block`, with
+/// nothing to attach to. A block written against the public header may assume
+/// nonnull, because the public path reports user-created activities and those are
+/// always reported; only a caller naming a type of its own can be handed nil.
 - (void)_runActivityNamed:(NSString *)name
                     type:(NSString *)type
-                   block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
+                   block:(XCT_NOESCAPE void (^)(id<XCTActivity> _Nullable activity))block;
 
 - (void)_runActivityNamed:(NSString *)name
                     block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
@@ -680,6 +687,22 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 
 - (void)runInternalActivityNamed:(NSString *)name
                            block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
+
+/// Whether an activity of `type` is one a run in `inTestMode` reports.
+///
+/// Split from -_shouldReportActivityWithType: so the answer can be had without a
+/// configuration in hand -- a caller that is only deciding what a mode implies
+/// has no run to consult. A UI-test run reports every type; any other run reports
+/// only the four that are results or containers.
++ (BOOL)shouldReportActivityWithType:(NSString *)type
+                          inTestMode:(XCTTestMode)inTestMode;
+
+/// Whether this run reports an activity of `type`, asking the active
+/// configuration.
+///
+/// No configuration means no: there is no run to report to, so an activity
+/// raised outside one has nowhere to land.
++ (BOOL)_shouldReportActivityWithType:(NSString *)type;
 
 @end
 

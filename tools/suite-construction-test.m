@@ -29,6 +29,7 @@
 #import <XCTest/XCTest.h>
 #import <XCTestCore/XCTTestSelection.h>
 #import <XCTestCore/XCActivityRecord.h>
+#import <XCTestCore/XCTestConfiguration.h>
 
 #import "XCTestInternal.h"
 #import "XCTestFoundationCompat.h"
@@ -847,8 +848,10 @@ static void testCaseSuiteLifecycle(void)
     ok("a class with no +setUp reports no suite set-up", observer.startCount == before, nil);
     ok("a class with no +tearDown reports no suite tear-down", observer.startCount == before, nil);
 
-    // A class with its own: both run, each inside an activity of the runner's
-    // own making, named for the phase.
+    // A class with its own: both run. Whether each is *reported* is a separate
+    // question, answered by the reporting filter rather than by this code --
+    // see testActivityReportingFilter. Here the run is a unit-test run, so the
+    // runner's own activities are not reportable and nothing is announced.
     XCTestSuite *withSetup = [XCTestSuite emptyTestSuiteForTestCaseClass:[XCTSuiteConstructionSetupFixture class]];
     ok("the fixture starts with nothing run",
        XCTSuiteConstructionSetupFixture.setUpCount == 0 && XCTSuiteConstructionSetupFixture.tearDownCount == 0,
@@ -857,7 +860,23 @@ static void testCaseSuiteLifecycle(void)
     before = observer.startCount;
     [withSetup setUp];
     ok("the class's +setUp is run by the suite", XCTSuiteConstructionSetupFixture.setUpCount == 1, nil);
-    ok("the suite's set-up is reported", observer.startCount == before + 1, nil);
+    ok("the suite's set-up is not reported in a unit-test run",
+       observer.startCount == before, nil);
+
+    before = observer.startCount;
+    [withSetup tearDown];
+    ok("the class's +tearDown is run by the suite", XCTSuiteConstructionSetupFixture.tearDownCount == 1, nil);
+    ok("the suite's tear-down is not reported in a unit-test run",
+       observer.startCount == before, nil);
+
+    // Same suite, same code, run reported: a UI-test run keeps every type, so
+    // the phase shows up and the name and type are the ones chosen above.
+    XCTestConfiguration *configuration = XCTestConfiguration.activeTestConfiguration;
+    configuration.initializeForUITesting = YES;
+
+    before = observer.startCount;
+    [withSetup setUp];
+    ok("the suite's set-up is reported in a UI-test run", observer.startCount == before + 1, nil);
     ok("the suite's set-up activity is named for the phase",
        [observer.startActivity.name isEqualToString:@"Suite Set Up"], observer.startActivity.name);
     ok("the suite's set-up is the framework's own activity",
@@ -868,12 +887,119 @@ static void testCaseSuiteLifecycle(void)
 
     before = observer.startCount;
     [withSetup tearDown];
-    ok("the class's +tearDown is run by the suite", XCTSuiteConstructionSetupFixture.tearDownCount == 1, nil);
-    ok("the suite's tear-down is reported", observer.startCount == before + 1, nil);
+    ok("the suite's tear-down is reported in a UI-test run", observer.startCount == before + 1, nil);
     ok("the suite's tear-down activity is named for the phase",
        [observer.startActivity.name isEqualToString:@"Suite Tear Down"], observer.startActivity.name);
 
+    configuration.initializeForUITesting = NO;
     [center removeTestObserver:observer];
+}
+
+// Which activities a run keeps. The gate is the type, not the name and not the
+// caller, so a name chosen by the framework can be just as reportable as one
+// chosen by a test -- and, the other way, a name a test chose can be dropped if
+// the type says so.
+static void testActivityReportingFilter(void)
+{
+    printf("\nactivity reporting filter\n");
+
+    XCTestConfiguration *configuration = XCTestConfiguration.activeTestConfiguration;
+
+    // A UI-test run is told where it is and answers from that alone; the type is
+    // not consulted, so even a type no run would otherwise keep survives.
+    ok("a UI-test run reports a user-created activity",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.userCreated"
+                                    inTestMode:XCTTestModeUITests], nil);
+    ok("a UI-test run reports an internal activity",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.internal"
+                                    inTestMode:XCTTestModeUITests], nil);
+    ok("a UI-test run reports a type no run would otherwise keep",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.deletedAttachment"
+                                    inTestMode:XCTTestModeUITests], nil);
+    ok("a UI-test run reports a type nobody has heard of",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.notAType"
+                                    inTestMode:XCTTestModeUITests], nil);
+
+    // A unit-test run answers from a fixed set, so every member is kept and
+    // everything else is dropped -- including the framework's own.
+    ok("a unit-test run reports a user-created activity",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.userCreated"
+                                    inTestMode:XCTTestModeUnitTests], nil);
+    ok("a unit-test run reports an attachment container",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.attachmentContainer"
+                                    inTestMode:XCTTestModeUnitTests], nil);
+    ok("a unit-test run reports a test assertion failure",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.testAssertionFailure"
+                                    inTestMode:XCTTestModeUnitTests], nil);
+    ok("a unit-test run reports a skipped test",
+       [XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.skippedTest"
+                                    inTestMode:XCTTestModeUnitTests], nil);
+    ok("a unit-test run does not report an internal activity",
+       ![XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.internal"
+                                     inTestMode:XCTTestModeUnitTests], nil);
+    ok("a unit-test run does not report a deleted attachment",
+       ![XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.deletedAttachment"
+                                     inTestMode:XCTTestModeUnitTests], nil);
+
+    // The configuration-facing form asks the run first, and its own switch is
+    // asked before the type: a run that has turned reporting off has said so
+    // about everything.
+    ok("a unit-test run reports what its mode keeps",
+       [XCTContext _shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.userCreated"], nil);
+    ok("a unit-test run drops what its mode does not",
+       ![XCTContext _shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.internal"], nil);
+
+    configuration.initializeForUITesting = YES;
+    ok("the same type is reportable once the mode says so",
+       [XCTContext _shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.internal"], nil);
+    configuration.initializeForUITesting = NO;
+
+    configuration.reportActivities = NO;
+    ok("a run with reporting off reports nothing",
+       ![XCTContext _shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.userCreated"], nil);
+    ok("reporting being off outranks the mode",
+       ![XCTContext shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.userCreated"
+                                     inTestMode:XCTTestModeUITests] == NO, nil);
+    configuration.reportActivities = YES;
+
+    // No configuration is no run, so there is nothing to report to. Asked through
+    // a mode this does not answer -- there is no mode without a run -- so it
+    // reports nothing rather than everything.
+    XCTestConfiguration *saved = configuration;
+    XCTestConfiguration.activeTestConfiguration = nil;
+    ok("with no configuration nothing is reported",
+       ![XCTContext _shouldReportActivityWithType:@"com.apple.dt.xctest.activity-type.userCreated"], nil);
+    XCTestConfiguration.activeTestConfiguration = saved;
+
+    // What the filter drops, the block still sees -- as nothing. The work runs;
+    // only the record is withheld, so a block handed nil has nothing to attach.
+    XCTContext *context = [XCTContext currentContextIfAvailable];
+    __block BOOL ranWithoutActivity = NO;
+    __block id<XCTActivity> handedActivity = (id)@"sentinel";
+    NSUInteger before = context.activityRecordStackDepth;
+    [context _runActivityNamed:@"Dropped"
+                          type:@"com.apple.dt.xctest.activity-type.internal"
+                         block:^(id<XCTActivity> activity) {
+        ranWithoutActivity = YES;
+        handedActivity = activity;
+    }];
+    ok("a dropped activity still runs its block", ranWithoutActivity, nil);
+    ok("a dropped activity hands the block nothing", handedActivity == nil, nil);
+    ok("a dropped activity leaves the stack where it was",
+       context.activityRecordStackDepth == before, nil);
+
+    // And a kept one behaves as before: reported, non-nil, pushed and popped.
+    __block id<XCTActivity> keptActivity = nil;
+    [context _runActivityNamed:@"Kept"
+                          type:@"com.apple.dt.xctest.activity-type.userCreated"
+                         block:^(id<XCTActivity> activity) {
+        keptActivity = activity;
+        ok("a kept activity is on the stack while its block runs",
+           context.activityRecordStackDepth == before + 1, nil);
+    }];
+    ok("a kept activity hands the block the record", keptActivity != nil, nil);
+    ok("a kept activity leaves the stack where it was",
+       context.activityRecordStackDepth == before, nil);
 }
 
 // An empty suite is only worth showing when it still means something, and the
@@ -919,6 +1045,11 @@ static void testEmptySuiteInclusion(void)
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
+    // A run has to exist before anything can be reported into one, and this is a
+    // plain tool rather than a run, so it installs a configuration of its own. It
+    // is a synthesized one, which means a unit-test run that reports activities --
+    // the defaults a run gets unless something opts out.
+    XCTestConfiguration.activeTestConfiguration = [[XCTestConfiguration alloc] init];
     // First, because it asks what a freshly made context looks like, and the
     // main thread's root context is shared by every section after this one.
     testContext();
@@ -929,6 +1060,7 @@ int main(void)
     testEmptySuite();
     testEmptySuiteInclusion();
     testCaseSuiteLifecycle();
+    testActivityReportingFilter();
     testActivityObservation();
     testActivityRecord();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");

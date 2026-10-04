@@ -15,6 +15,7 @@
 #import "XCTestInternal.h"
 
 #import <XCTestCore/XCActivityRecord.h>
+#import <XCTestCore/XCTestConfiguration.h>
 #import "XCTestObservationInternal.h"
 
 // The SDK's Foundation headers omit -isKindOfClass: on some reduced runtimes but
@@ -29,6 +30,20 @@ static NSString *const XCActivityTypeUserCreated = @"com.apple.dt.xctest.activit
 // is what tells a reader that "Suite Set Up" was the runner's doing rather than
 // something a test asked to see.
 static NSString *const XCActivityTypeInternal = @"com.apple.dt.xctest.activity-type.internal";
+
+// An activity standing in for a run of activities rather than for one piece of
+// work: the tree that groups a test's attachments, so that a reader given the
+// container can find what it holds without walking every leaf.
+static NSString *const XCActivityTypeAttachmentContainer = @"com.apple.dt.xctest.activity-type.attachmentContainer";
+
+// An activity recording an assertion that failed. Kept distinct from
+// userCreated because it survives into the report on its own: a failure is
+// evidence, and it has to be findable even in a mode that drops the rest.
+static NSString *const XCActivityTypeTestAssertionFailure = @"com.apple.dt.xctest.activity-type.testAssertionFailure";
+
+// An activity recording that a test did not run, and why. Same reason as the
+// above -- a skip is a result, not narration.
+static NSString *const XCActivityTypeSkippedTest = @"com.apple.dt.xctest.activity-type.skippedTest";
 
 // The key the per-thread context stack is filed under in NSThread's dictionary.
 //
@@ -334,6 +349,53 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
     return _tearDownBlocks;
 }
 
+#pragma mark - Whether an activity is worth reporting
+
++ (BOOL)shouldReportActivityWithType:(NSString *)type
+                          inTestMode:(XCTTestMode)inTestMode
+{
+    // A UI-test run reports everything. The activities a runner starts for its
+    // own reasons -- a suite's setUp, a frame it stepped through -- are the ones
+    // worth seeing when driving an app, because the position in the tree is what
+    // says what the app was doing. Nothing is filtered out there, so the answer
+    // does not depend on the type at all.
+    if (inTestMode == XCTTestModeUITests) {
+        return YES;
+    }
+    // Otherwise the answer is a lookup, not a rule. Only a fixed set of types is
+    // reportable, and a type outside it is dropped however central it looked to
+    // the code raising it.
+    //
+    // internal is not in the set, which is the whole point of the type: the
+    // runner's own bookkeeping is what a unit test's report does not carry.
+    static NSSet<NSString *> *allowedActivityTypes;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        allowedActivityTypes = [NSSet setWithObjects:XCActivityTypeUserCreated,
+                                                      XCActivityTypeAttachmentContainer,
+                                                      XCActivityTypeTestAssertionFailure,
+                                                      XCActivityTypeSkippedTest,
+                                                      nil];
+    });
+    return [allowedActivityTypes containsObject:type];
+}
+
++ (BOOL)_shouldReportActivityWithType:(NSString *)type
+{
+    // Two things have to agree before an activity is reported, and they are
+    // asked in this order.
+    //
+    // reportActivities first: it is the run's own switch, and a run that has
+    // turned reporting off has said so about everything, so no per-type answer
+    // is worth forming. Asking the mode first would be harmless but pointless.
+    XCTestConfiguration *configuration = XCTestConfiguration.activeTestConfiguration;
+    if (!configuration.reportActivities) {
+        return NO;
+    }
+    return [self shouldReportActivityWithType:type
+                                   inTestMode:configuration.testMode];
+}
+
 #pragma mark - Running a block as an activity
 
 + (void)runActivityNamed:(NSString *)name
@@ -388,11 +450,7 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
     // test author asked for by name.
     [self _runActivityNamed:name
                         type:XCActivityTypeInternal
-                       block:^(id<XCTActivity> activity) {
-        if (activity != nil) {
-            block(activity);
-        }
-    }];
+                       block:block];
 }
 
 - (void)_runActivityNamed:(NSString *)name
@@ -400,16 +458,12 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
 {
     [self _runActivityNamed:name
                         type:XCActivityTypeUserCreated
-                       block:^(id<XCTActivity> activity) {
-        if (activity != nil) {
-            block(activity);
-        }
-    }];
+                       block:block];
 }
 
 - (void)_runActivityNamed:(NSString *)name
                     type:(NSString *)type
-                   block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block
+                   block:(XCT_NOESCAPE void (^)(id<XCTActivity> _Nullable activity))block
 {
     if (block == nil) {
         XCTContextRaiseAssertion(@"an activity block may not be nil",
@@ -420,6 +474,18 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
     // and an object autoreleased out to the end of the test would report its
     // cost against the test rather than against the block that made it.
     @autoreleasepool {
+        if (![[self class] _shouldReportActivityWithType:type]) {
+            // Dropped, but not skipped. The block is the caller's work and it
+            // runs either way -- what is withheld is the record, not the effect.
+            // So it is handed nil, and a block that wanted to attach something to
+            // the activity finds nothing to attach to, which is the truth.
+            //
+            // The autoreleasepool still gets pushed: the work runs here, and its
+            // temporaries should be released when the block ends rather than
+            // charged to whatever context happens to be running later.
+            block(nil);
+            return;
+        }
         XCActivityRecord *activity = [self willStartActivityWithTitle:name type:type];
         // @finally, not @catch: a block that throws has still finished. An
         // activity that started and never finished would sit on the stack for
