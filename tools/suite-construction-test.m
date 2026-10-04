@@ -611,16 +611,27 @@ static void testAsyncBlockSignatures(void)
                                                 firstBlockArgumentSignature:takesNothing
                                                                 isThrowing:&isThrowing] && !isThrowing, nil);
 
-    // Deferred: telling a handler that takes an NSError from one that takes
-    // nothing means naming the class of the block's first argument, which
-    // needs -_classForObjectAtArgumentIndex:. Until that lands such a handler
-    // is rejected rather than mistaken for one that cannot report a failure.
+    // Telling a handler that takes an NSError from one that takes nothing means
+    // naming the class of the block's first argument. Foundation's private
+    // -_classForObjectAtArgumentIndex: is the only route to that, and measured
+    // against a signature built from a type encoding it resolves nothing --
+    // nil at every index, including the block itself -- because an encoding
+    // says only "@" for any object. So such a handler is rejected rather than
+    // mistaken for one that can only report success. Rejecting is safe:
+    // nothing then invokes a test whose convention was never established.
     isThrowing = NO;
-    ok("a handler that takes an error is not yet recognised",
+    ok("a handler that takes an error is not recognised",
        ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
                                                               returnType:'v'
                                                 firstBlockArgumentSignature:takesAnError
                                                                 isThrowing:&isThrowing] && !isThrowing, nil);
+    // A handler taking no argument does satisfy the shape, so the two are not
+    // rejected for the same reason.
+    ok("the two handler shapes are told apart, not both refused",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:takesNothing
+                                                                isThrowing:NULL], nil);
 
     // The method's own shape still has to be right.
     ok("a method with a second argument is not a test",

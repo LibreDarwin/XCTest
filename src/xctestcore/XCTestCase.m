@@ -687,6 +687,17 @@ static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
     // read from, never the test method's -- both are void with one argument,
     // which is all a method has in common with a method that reports nothing.
     const char *blockReturnType = firstBlockArgumentSignature.methodReturnType;
+    // A handler with no parameter has no first argument class to report, and
+    // saying so is what tells a handler that can only report success from one
+    // that might report a failure. Reading it would mean naming the class of
+    // the block's first argument, which needs Foundation's private
+    // -_classForObjectAtArgumentIndex:; measured against a signature built
+    // from a type encoding that resolves nothing -- nil for every index,
+    // including the block itself -- because an encoding says only "@" for any
+    // object and carries no class to resolve. Passing Nil here therefore
+    // rejects a handler that takes an NSError rather than mistaking it for one
+    // that cannot report a failure, which is the safe direction: nothing then
+    // invokes a test whose convention was never established.
     return [self isValidTestMethodUsingAsyncConventionWithArgumentCount:argumentCount
                                                             returnType:returnType
                                                   blockArgumentCount:firstBlockArgumentSignature.numberOfArguments
