@@ -62,6 +62,21 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 - (void)testExample {}
 @end
 
+// Written in the error convention: an out-parameter carries the result, so the
+// return type has to be able to. Discovery can recognize the shape but must not
+// run it yet -- there is no way to hand a method an NSError ** and read a value
+// back out of it, so reporting it as a test would mean calling it wrongly.
+@interface XCTSuiteConstructionErrorConventionFixture : XCTestCase
+- (id)testReportsThroughAnError:(NSError **)error;
+@end
+@implementation XCTSuiteConstructionErrorConventionFixture
+- (id)testReportsThroughAnError:(NSError **)error
+{
+    *error = nil;
+    return self;
+}
+@end
+
 // Supplies its own +defaultTestSuite, the path that lets a class decide what its
 // suite contains without the invocations being scanned.
 @interface XCTSuiteConstructionDefaultSuiteFixture : XCTestCase
@@ -383,6 +398,65 @@ static void testAvailability(void)
     // with no hook is sent nothing at all.
     ok("a class with no hook does not answer the question",
        ![XCTSuiteConstructionNotATestCase respondsToSelector:@selector(_isAvailable)], nil);
+}
+
+#pragma mark - Test method conventions
+
+static void testMethodConventions(void)
+{
+    printf("test method conventions\n");
+
+    // Standard: self and _cmd, and no result to wait for.
+    ok("standard accepts void with no arguments",
+       [XCTestCase isValidTestMethodUsingStandardConventionWithArgumentCount:2 returnType:'v'], nil);
+    ok("standard rejects a return value",
+       ![XCTestCase isValidTestMethodUsingStandardConventionWithArgumentCount:2 returnType:'i'], nil);
+    ok("standard rejects an argument",
+       ![XCTestCase isValidTestMethodUsingStandardConventionWithArgumentCount:3 returnType:'v'], nil);
+
+    // Error: one argument to report through, and a return type able to carry a
+    // value. All three spellings the reference accepts are accepted.
+    ok("error accepts an object returning an out-parameter",
+       [XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                            returnType:'o'
+                                                    firstArgumentType:"^@"], nil);
+    ok("error accepts a C++ bool returning an out-parameter",
+       [XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                            returnType:'B'
+                                                    firstArgumentType:"^@"], nil);
+    ok("error accepts a C++ class returning an out-parameter",
+       [XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                            returnType:'C'
+                                                    firstArgumentType:"^@"], nil);
+    ok("error rejects a void return",
+       ![XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                             returnType:'v'
+                                                     firstArgumentType:"^@"], nil);
+    ok("error rejects a scalar return",
+       ![XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                             returnType:'i'
+                                                     firstArgumentType:"^@"], nil);
+    // A block in that slot is the async convention, so it is not this one.
+    ok("error rejects a block argument",
+       ![XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                             returnType:'o'
+                                                     firstArgumentType:"@?"], nil);
+    ok("error rejects a scalar argument",
+       ![XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                             returnType:'o'
+                                                     firstArgumentType:"^i"], nil);
+    ok("error rejects a method with no argument",
+       ![XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:2
+                                                             returnType:'o'
+                                                     firstArgumentType:"^@"], nil);
+
+    // The predicates classify a signature; they do not decide what runs. Until
+    // the invoker knows how to report through an out-parameter, a method in
+    // this convention is still left out rather than called incorrectly.
+    ok("discovery still finds a plain fixture's tests",
+       [[[XCTSuiteConstructionPlainFixture class] testInvocations] count] > 0, nil);
+    ok("discovery leaves the error convention out until it can be run",
+       [[[XCTSuiteConstructionErrorConventionFixture class] testInvocations] count] == 0, nil);
 }
 
 #pragma mark - Class from string
@@ -1456,6 +1530,7 @@ int main(void)
     testSwiftCounterparts();
     testNaming();
     testAvailability();
+    testMethodConventions();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();

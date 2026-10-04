@@ -349,6 +349,42 @@ XCT_EXPORT Class _XCTTestCaseClassFromString(NSString *className);
 @property (class, nonatomic, readonly) NSDictionary<NSString *, Class> *testCaseClassesByString;
 @end
 
+/// How a test method asks to be called.
+///
+/// Not every test is a void method taking no arguments. The async and throws
+/// support a test runner builds for Swift compiles down to shapes that take a
+/// completion handler, and a method that reports failure the way the
+/// pre-Swift idiom does takes an NSError ** out-parameter. Discovery that
+/// recognized only `void` would drop all of them, so the shape is named and
+/// recorded with the invocation, and the invoker acts on which one it has.
+///
+/// The values are the reference's. They are written into descriptors other code
+/// compares against, so renumbering them changes meaning rather than tidying.
+typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
+    /// - (void)testFoo -- no result to wait for and nowhere to report failure.
+    XCTTestMethodConventionStandard = 0,
+    /// - (id)testFoo:(NSError **)error -- reports through an out-parameter.
+    XCTTestMethodConventionError = 1,
+    /// Takes a completion handler and can throw.
+    XCTTestMethodConventionAsyncThrowing = 2,
+    /// Takes a completion handler and cannot throw.
+    XCTTestMethodConventionAsyncNonThrowing = 3,
+};
+
+/// Decides which convention a method signature is written in.
+///
+/// The argument count and type characters are what a discovery pass has already
+/// read out of the signature, so these take the pieces rather than the
+/// signature itself. They are separate predicates because the caller has to know
+/// which one matched -- the convention is the answer, not a yes.
+@interface XCTestCase (XCTTestMethodConventions)
++ (BOOL)isValidTestMethodUsingStandardConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                       returnType:(char)returnType;
++ (BOOL)isValidTestMethodUsingErrorConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                     returnType:(char)returnType
+                                             firstArgumentType:(const char *)firstArgumentType;
+@end
+
 /// How a test names itself, and the identifier that names it to the selection
 /// machinery.
 ///

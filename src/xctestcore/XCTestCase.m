@@ -590,6 +590,48 @@ static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selec
 
 #pragma mark - Discovery
 
+/// Whether a return type can carry a result for the error convention: a C++
+/// bool, a C++ class, or an Objective-C object.
+///
+/// The reference decides this with a bitmask over the offset from 'B', and
+/// those three encodings are every bit the mask selects. A void return is not
+/// among them -- a method taking an NSError ** but returning nothing reports
+/// failure only, which is the standard convention's job.
+static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
+{
+    switch (returnType) {
+        case 'B':
+        case 'C':
+        case 'o':
+            return YES;
+        default:
+            return NO;
+    }
+}
+
++ (BOOL)isValidTestMethodUsingStandardConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                       returnType:(char)returnType
+{
+    // self and _cmd, and nothing else; no result to wait for.
+    return argumentCount == 2 && returnType == 'v';
+}
+
++ (BOOL)isValidTestMethodUsingErrorConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                     returnType:(char)returnType
+                                             firstArgumentType:(const char *)firstArgumentType
+{
+    if (argumentCount != 3 || !_XCTReturnTypeCarriesAValueForErrorConvention(returnType)) {
+        return NO;
+    }
+    // '^@' is a pointer to an object, so an NSError ** out-parameter. '@?' is a
+    // block, which is how the async convention spells the same slot and is
+    // answered by that predicate instead -- asking this one about it is the
+    // difference between a test and a method that merely looks like one. The
+    // type string is read without checking it for null, because a method that
+    // has an argument has a type encoding for it.
+    return firstArgumentType[0] == '^' && firstArgumentType[1] == '@';
+}
+
 + (NSArray<NSInvocation *> *)testInvocations
 {
     NSMutableDictionary<NSString *, NSValue *> *selectorsByName = [NSMutableDictionary dictionary];
@@ -609,17 +651,15 @@ static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selec
             if (name == NULL || strncmp(name, "test", 4) != 0) {
                 continue;
             }
-            // self and _cmd only: a test takes no arguments.
-            if (method_getNumberOfArguments(methods[i]) != 2) {
-                continue;
-            }
+            // self and _cmd only, returning void. Asked as a convention rather
+            // than tested inline so the shape is named: the conventions not
+            // recognized here are still distinguishable from a method that is
+            // merely malformed, which is what makes them addable later.
             char *returnType = method_copyReturnType(methods[i]);
-            if (returnType == NULL) {
-                continue;
-            }
-            BOOL isVoid = strcmp(returnType, "v") == 0;
+            char returnTypeCharacter = returnType != NULL ? returnType[0] : '\0';
             free(returnType);
-            if (!isVoid) {
+            if (![self isValidTestMethodUsingStandardConventionWithArgumentCount:method_getNumberOfArguments(methods[i])
+                                                                     returnType:returnTypeCharacter]) {
                 continue;
             }
             // A subclass method of the same name shadows the superclass one.
