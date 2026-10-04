@@ -768,9 +768,10 @@ static NSArray *_XCTSortedClassList(NSSet *classes)
     // here would mean re-declaring a Foundation type with a definition of our
     // own, which is what XCTestCoreFoundationCompat.h deliberately refuses to
     // do. So the base answers yes and the hook stays: a subclass that does know
-    // it cannot run overrides this one method, and XCTTestCaseClassIsAvailable
-    // below asks the class rather than assuming, so nothing about the
-    // construction path depends on the comparison being here.
+    // it cannot run overrides this one method, and
+    // _XCTTestCaseClassIsAvailable below asks the class rather than assuming,
+    // so nothing about the construction path depends on the comparison being
+    // here.
     return YES;
 }
 
@@ -783,12 +784,96 @@ static NSArray *_XCTSortedClassList(NSSet *classes)
 /// which yields a plain suite, the conservative outcome, because a suite that is
 /// only a name is still an accurate report of an empty class, while a case suite
 /// claiming to know a class it cannot run is not.
-BOOL XCTTestCaseClassIsAvailable(Class testCaseClass)
+BOOL _XCTTestCaseClassIsAvailable(Class testCaseClass)
 {
     if ([testCaseClass respondsToSelector:@selector(_isAvailable)]) {
         return [testCaseClass _isAvailable];
     }
     return NO;
+}
+
+/// Every discovered test case class, keyed by name with the module stripped.
+///
+/// The configuration names a test class the way the user wrote it -- "MyTests",
+/// not "MyAppTests.MyTests" -- so the registry is keyed that way too, and that
+/// spelling is the only reason a lookup below can succeed for a name the runtime
+/// cannot resolve. The module-stripped name is what _XCTClassNameWithoutModule
+/// produces; the reference builds the same dictionary the same way, from
+/// +_allSubclasses rather than from the bundle-filtered set, so a class bundled
+/// with XCTest itself is registered here as well.
+///
+/// Immutable once built. The dictionary is published under dispatch_once so that
+/// a concurrent first lookup cannot see it half-filled, and the copy is what gets
+/// published because nothing may add to it afterwards.
+///
+/// The implementation sits at the end of this file, past @implementation
+/// XCTestCase: the backing store and the once token are file-scope statics
+/// declared here rather than locals of the getter, because the token has to be
+/// readable by the re-entry check below without going through the getter --
+/// calling the getter is exactly the thing that could block. This is the
+/// reference's arrangement too, and the two appear there as the neighbouring
+/// symbols XCTTestCaseClassesByString.testCaseClassesByString and
+/// XCTTestCaseClassesByString.onceToken.
+static NSDictionary<NSString *, Class> *_XCTTestCaseClassesByString = nil;
+static dispatch_once_t _XCTTestCaseClassesByStringOnceToken;
+
+/// Whether dispatch_once is currently building the registry.
+///
+/// The registry is built from a class scan, and a scan can force the runtime to
+/// realize a class whose +initialize registers another test case. Should that
+/// registration ask for a class by name, it would re-enter the registry while
+/// the once is in flight, and dispatch_once cannot be re-entered on the same
+/// token. So the reader asks the token first and takes "not built" for an answer
+/// instead of waiting on itself; the registry is then never the source of an
+/// answer to the lookup that is building it.
+///
+/// This reads a libdispatch implementation detail: the token holds -1 exactly
+/// while the block runs, which is the whole of how the reference distinguishes
+/// the two states (it compares the token against -1 and skips the lookup). There
+/// is no public API for "is this once in flight", so a libdispatch that chose a
+/// different in-progress value would make this check always false -- which costs
+/// only the re-entrancy case, not correctness of the lookups themselves.
+static BOOL _XCTTestCaseClassesAreBeingBuilt(void)
+{
+    return _XCTTestCaseClassesByStringOnceToken == (dispatch_once_t)-1;
+}
+
+Class _XCTTestCaseClassFromString(NSString *className)
+{
+    Class testCaseClass = NSClassFromString(className);
+    if (testCaseClass == Nil) {
+        // The runtime resolves "Class" and "Module.Class" differently, and a
+        // test target's classes are almost always the second kind. Asking with
+        // the product module prefixed is what makes a plain name work.
+        NSString *productModuleName = [XCTestConfiguration.activeTestConfiguration productModuleName];
+        if (productModuleName != nil) {
+            testCaseClass = NSClassFromString([productModuleName stringByAppendingFormat:@".%@", className]);
+        }
+        if (testCaseClass == Nil && !_XCTTestCaseClassesAreBeingBuilt()) {
+            testCaseClass = [XCTTestCaseClassesByString.testCaseClassesByString objectForKeyedSubscript:className];
+        }
+    }
+
+    if (testCaseClass == Nil) {
+        return Nil;
+    }
+
+    if (testCaseClass != [XCTestCase class]) {
+        for (Class superclass = class_getSuperclass(testCaseClass);
+             superclass != Nil;
+             superclass = class_getSuperclass(superclass)) {
+            if (superclass == [XCTestCase class]) {
+                return testCaseClass;
+            }
+        }
+    }
+
+    // Either XCTestCase itself, which is not below itself and so the walk above
+    // never reaches it, or a class that descends from nothing relevant. What is
+    // left is the other kind of evidence a run can act on: a class that knows how
+    // to build a suite of itself. Anything else is not a test class, and is
+    // reported as absent rather than returned to fail later.
+    return [testCaseClass respondsToSelector:@selector(defaultTestSuite)] ? testCaseClass : Nil;
 }
 
 #pragma mark - Suite extensions
@@ -977,6 +1062,24 @@ BOOL XCTTestCaseClassIsAvailable(Class testCaseClass)
 - (BOOL)_xct_isOnPrimaryThread
 {
     return pthread_equal(_primaryThread, pthread_self()) != 0;
+}
+
+@end
+
+#pragma mark - Test case registry
+
+@implementation XCTTestCaseClassesByString
+
++ (NSDictionary<NSString *, Class> *)testCaseClassesByString
+{
+    dispatch_once(&_XCTTestCaseClassesByStringOnceToken, ^{
+        NSMutableDictionary<NSString *, Class> *discovered = [NSMutableDictionary dictionary];
+        for (Class candidate in [XCTestCase _allSubclasses]) {
+            discovered[_XCTClassNameWithoutModuleFromClass(candidate)] = candidate;
+        }
+        _XCTTestCaseClassesByString = [discovered copy];
+    });
+    return _XCTTestCaseClassesByString;
 }
 
 @end

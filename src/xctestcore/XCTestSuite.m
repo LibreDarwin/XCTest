@@ -339,7 +339,7 @@
     // identifier's own job when it is constructed, so a Swift class and an
     // Objective-C one reach the same spelling either way round.
     XCTTestIdentifier *identifier = [[XCTTestIdentifier alloc] initWithClassName:NSStringFromClass(testCaseClass)];
-    if (XCTTestCaseClassIsAvailable(testCaseClass)) {
+    if (_XCTTestCaseClassIsAvailable(testCaseClass)) {
         // The case suite names itself from the class, so the name is not passed
         // in here.
         return [[XCTestCaseSuite alloc] initWithTestCaseClass:testCaseClass identifier:identifier];

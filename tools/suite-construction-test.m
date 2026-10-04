@@ -139,6 +139,18 @@ static NSUInteger XCTSuiteConstructionTearDownCount = 0;
 @implementation XCTSuiteConstructionNotATestCase
 @end
 
+// Not a test case, but knows how to describe itself as a suite. This is the
+// evidence _XCTTestCaseClassFromString accepts in place of descending from
+// XCTestCase, so the class has to exist for that branch to be exercised.
+@interface XCTSuiteConstructionSuiteProvider : NSObject
+@end
+@implementation XCTSuiteConstructionSuiteProvider
++ (XCTestSuite *)defaultTestSuite
+{
+    return nil;
+}
+@end
+
 #pragma mark - Activity observation fixtures
 
 // Records the order callbacks arrive in, so that the start and finish
@@ -361,16 +373,67 @@ static void testAvailability(void)
     // Asked of the class, and inherited answers count: every XCTestCase subclass
     // has the hook, so a plain subclass is available without saying anything.
     ok("a plain test class is available",
-       XCTTestCaseClassIsAvailable([XCTSuiteConstructionPlainFixture class]), nil);
+       _XCTTestCaseClassIsAvailable([XCTSuiteConstructionPlainFixture class]), nil);
     ok("a subclass that overrides the hook can refuse",
-       !XCTTestCaseClassIsAvailable([XCTSuiteConstructionUnavailableFixture class]), nil);
+       !_XCTTestCaseClassIsAvailable([XCTSuiteConstructionUnavailableFixture class]), nil);
     ok("a class that is not a test case is unavailable",
-       !XCTTestCaseClassIsAvailable([XCTSuiteConstructionNotATestCase class]), nil);
+       !_XCTTestCaseClassIsAvailable([XCTSuiteConstructionNotATestCase class]), nil);
 
     // The guard is the -respondsToSelector: one, not a kind-of test: the class
     // with no hook is sent nothing at all.
     ok("a class with no hook does not answer the question",
        ![XCTSuiteConstructionNotATestCase respondsToSelector:@selector(_isAvailable)], nil);
+}
+
+#pragma mark - Class from string
+
+static void testClassFromString(void)
+{
+    printf("class from string\n");
+
+    // A test case class by its own name: the runtime resolves it, and descending
+    // from XCTestCase is all that is needed to accept it.
+    ok("a test class resolves by name",
+       _XCTTestCaseClassFromString(@"XCTSuiteConstructionPlainFixture")
+           == [XCTSuiteConstructionPlainFixture class], nil);
+
+    // XCTestCase is not below itself, so the walk cannot find it. It is still a
+    // test case, and it answers +defaultTestSuite, so the shared rule accepts it.
+    ok("XCTestCase resolves to itself",
+       _XCTTestCaseClassFromString(@"XCTestCase") == [XCTestCase class], nil);
+    ok("XCTestCase answers the suite question it is accepted on",
+       [XCTestCase respondsToSelector:@selector(defaultTestSuite)], nil);
+
+    // The acceptance test for a class that is not a test case is whether it can
+    // build a suite of itself, not whether it descends from anything.
+    ok("a non-test class that builds a suite is accepted",
+       _XCTTestCaseClassFromString(@"XCTSuiteConstructionSuiteProvider")
+           == [XCTSuiteConstructionSuiteProvider class], nil);
+    ok("a non-test class that cannot is rejected",
+       _XCTTestCaseClassFromString(@"XCTSuiteConstructionNotATestCase") == Nil,
+       @"resolves but is neither a test case nor a suite provider");
+
+    // An unknown name is absent, not a class that fails later.
+    ok("an unknown name is absent",
+       _XCTTestCaseClassFromString(@"XCTSuiteConstructionNoSuchClass") == Nil, nil);
+
+    // The registry is keyed by name with the module stripped, because that is
+    // how a configuration names a class. Asserted directly: for an Objective-C
+    // class the stripped name and the runtime name are the same string, so the
+    // registry cannot be reached by a lookup that -NSClassFromString already
+    // answered. It earns its keep for Swift classes, whose runtime name carries
+    // the module and whose configured name does not.
+    NSDictionary *registry = [XCTTestCaseClassesByString testCaseClassesByString];
+    ok("the registry holds the test class under its stripped name",
+       [registry[@"XCTSuiteConstructionPlainFixture"]
+           isEqual:[XCTSuiteConstructionPlainFixture class]], nil);
+    ok("no registry key carries a module",
+       [registry.allKeys containsObject:@"XCTSuiteConstructionPlainFixture"], nil);
+
+    // Built once and immutable: a second read is the same object, and asking the
+    // question twice does not rebuild.
+    ok("the registry is built once",
+       [XCTTestCaseClassesByString testCaseClassesByString] == registry, nil);
 }
 
 #pragma mark - Empty suite
@@ -1393,6 +1456,7 @@ int main(void)
     testSwiftCounterparts();
     testNaming();
     testAvailability();
+    testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();
     testCaseSuiteLifecycle();

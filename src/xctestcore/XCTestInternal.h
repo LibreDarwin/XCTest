@@ -288,7 +288,7 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// Asked of the class rather than the instance because the answer gates a suite
 /// tree, which is built before any case exists: a class that cannot run here is
 /// represented by a plain suite rather than by a case suite. See
-/// XCTTestCaseClassIsAvailable for what the answer is used for.
+/// _XCTTestCaseClassIsAvailable for what the answer is used for.
 ///
 /// The reference answers by comparing +minimumOperatingSystemVersion -- a
 /// version the test class declares, defaulting to 0.0.0 -- against the running
@@ -317,7 +317,37 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// The -respondsToSelector: test is the reference's and is the whole of it: a
 /// class that is not a test case, or that has no answer to give, is NO rather
 /// than being sent a question it does not implement.
-XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
+XCT_EXPORT BOOL _XCTTestCaseClassIsAvailable(Class testCaseClass);
+
+/// The test case class a name refers to, or Nil when the name is not one.
+///
+/// Three lookups, in the reference's order, because each rescues a case the one
+/// before it cannot see. -NSClassFromString answers for names the runtime can
+/// resolve as written. A name from a Swift or Objective-C test target usually
+/// cannot be resolved that way, because the class is really called
+/// "Module.Class"; prefixing the run's product module name and asking again
+/// finds it. Failing that, the run's registry of discovered test classes is
+/// asked, which is keyed by name with the module stripped -- the same spelling
+/// the configuration uses to name a test class, so it is the lookup that
+/// actually matches.
+///
+/// Not every class found is returned. A class that is XCTestCase or descends
+/// from it is a test case by definition. Any other class is accepted only if it
+/// answers +defaultTestSuite, which is the same evidence XCTest uses to decide a
+/// named class is worth building a case suite for. A name that resolves to
+/// neither is not a test class and is reported as absent rather than returned
+/// and failed later.
+XCT_EXPORT Class _XCTTestCaseClassFromString(NSString *className);
+
+/// Every discovered test case class, keyed by name with the module stripped.
+///
+/// The fallback _XCTTestCaseClassFromString consults when a name does not
+/// resolve directly. The key spelling is the reason it is worth having: a
+/// configuration names a class the way the user wrote it, so a Swift test class
+/// is registered as "MyTests" even though its runtime name is "MyApp.MyTests".
+@interface XCTTestCaseClassesByString : NSObject
+@property (class, nonatomic, readonly) NSDictionary<NSString *, Class> *testCaseClassesByString;
+@end
 
 /// How a test names itself, and the identifier that names it to the selection
 /// machinery.
