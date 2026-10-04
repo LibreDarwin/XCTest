@@ -385,6 +385,45 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
                                              firstArgumentType:(const char *)firstArgumentType;
 @end
 
+/// A discovered test method, as the pieces needed to run it.
+///
+/// Discovery cannot return a bare NSInvocation. An invocation says which method
+/// to call but not how it wants to be called, and a method that reports through
+/// an NSError ** or a completion handler is called wrongly -- or crashes -- if
+/// the caller treats it as one that returns void. Carrying the convention beside
+/// the invocation is what lets the same list be both the set of tests and the
+/// instruction for running each one.
+@interface XCTTestInvocationDescriptor : NSObject
+
+/// The method's name as a user would write it, without the class.
+@property (nonatomic, readonly, copy) NSString *selectorString;
+
+/// Which convention the method is written in, or nil if the caller did not say.
+///
+/// A number rather than an XCTTestMethodConvention so that "not decided yet" is
+/// expressible. Zero is the standard convention, so substituting it for nil
+/// would report a decision that was never made.
+@property (nonatomic, readonly, strong, nullable) NSNumber *convention;
+
+/// Already targeted at the test case, so the invoker does not have to guess.
+@property (nonatomic, readonly, strong) NSInvocation *invocation;
+
+/// What to say if this test turns out not to be runnable.
+@property (nonatomic, readonly, copy) NSString *customErrorMessage;
+
+- (instancetype)initWithSelectorString:(NSString *)selectorString
+                        conventionNumber:(nullable NSNumber *)conventionNumber
+                             invocation:(NSInvocation *)invocation
+                     customErrorMessage:(NSString *)customErrorMessage;
+- (instancetype)initWithSelectorString:(NSString *)selectorString
+                            invocation:(NSInvocation *)invocation
+                     customErrorMessage:(NSString *)customErrorMessage;
+- (instancetype)initWithSelectorString:(NSString *)selectorString
+                            convention:(XCTTestMethodConvention)convention
+                            invocation:(NSInvocation *)invocation
+                     customErrorMessage:(NSString *)customErrorMessage;
+@end
+
 /// How a test names itself, and the identifier that names it to the selection
 /// machinery.
 ///

@@ -37,6 +37,8 @@
 
 #import <Foundation/Foundation.h>
 #import <math.h>
+#import <objc/runtime.h>
+#import <string.h>
 
 #import <stdio.h>
 
@@ -457,6 +459,129 @@ static void testMethodConventions(void)
        [[[XCTSuiteConstructionPlainFixture class] testInvocations] count] > 0, nil);
     ok("discovery leaves the error convention out until it can be run",
        [[[XCTSuiteConstructionErrorConventionFixture class] testInvocations] count] == 0, nil);
+}
+
+#pragma mark - Invocation descriptors
+
+// -copy on an immutable string hands back the same object, so identity cannot
+    // show that the copy happened, and the SDK here has no mutable string to
+    // mutate. What can be checked is the declaration the initializer relies on:
+//    the property is copy, so a mutable string passed in cannot be changed from
+//    under the descriptor afterwards.
+//
+// The flags are compared without the type encoding that precedes them. The
+// attributes string is a type followed by flags -- T@"NSString",C,N,V_name --
+// and the type is full of characters that look like flags: NSNumber contains an
+// S, NSString a C. Only the field after the quoted type counts.
+static BOOL descriptorPropertyHasFlag(const char *name, char flag)
+{
+    objc_property_t property = class_getProperty([XCTTestInvocationDescriptor class], name);
+    if (property == NULL) {
+        return NO;
+    }
+    const char *attributes = property_getAttributes(property);
+    if (attributes == NULL) {
+        return NO;
+    }
+    const char *flags = strstr(attributes, "\",");
+    if (flags == NULL) {
+        return NO;
+    }
+    flags += 2;
+    // The flags are a comma-separated run that ends where the ivar name begins,
+    // so the window is everything before ",V" rather than the first field.
+    const char *end = strstr(flags, ",V");
+    return end != NULL ? memchr(flags, flag, (size_t)(end - flags)) != NULL
+                       : strchr(flags, flag) != NULL;
+}
+
+static void testInvocationDescriptors(void)
+{
+    printf("invocation descriptors\n");
+
+    // A real invocation, taken from discovery, rather than one written here: the
+    // SDK has no way to spell a signature by hand, and this is the pairing the
+    // descriptor exists for anyway.
+    NSInvocation *invocation = [[[XCTSuiteConstructionPlainFixture class] testInvocations] firstObject];
+    ok("discovery produced an invocation to describe", invocation != nil, nil);
+
+    // The form that states nothing about the convention must not be read as
+    // stating the standard one: a descriptor built from only a name and an
+    // invocation has not decided, and 0 would claim it had.
+    XCTTestInvocationDescriptor *unstated =
+        [[XCTTestInvocationDescriptor alloc] initWithSelectorString:@"testExample"
+                                                         invocation:invocation
+                                                  customErrorMessage:@"unstated"];
+    ok("a descriptor with no stated convention has none",
+       unstated.convention == nil, nil);
+    ok("a descriptor with no stated convention is not the standard one",
+       ![unstated.convention isEqualToNumber:@(XCTTestMethodConventionStandard)], nil);
+    ok("a descriptor keeps its selector name",
+       [unstated.selectorString isEqualToString:@"testExample"], nil);
+    ok("a descriptor keeps its invocation",
+       unstated.invocation == invocation, nil);
+    ok("a descriptor keeps its error message",
+       [unstated.customErrorMessage isEqualToString:@"unstated"], nil);
+
+    // Stating the convention boxes it, so the enum and the stored number cannot
+    // disagree about what was asked for.
+    XCTTestInvocationDescriptor *standard =
+        [[XCTTestInvocationDescriptor alloc] initWithSelectorString:@"testStandard"
+                                                         convention:XCTTestMethodConventionStandard
+                                                         invocation:invocation
+                                                  customErrorMessage:@"standard"];
+    ok("a stated convention is stored as its number",
+       [standard.convention isEqualToNumber:@(XCTTestMethodConventionStandard)], nil);
+    XCTTestInvocationDescriptor *async =
+        [[XCTTestInvocationDescriptor alloc] initWithSelectorString:@"testAsync"
+                                                         convention:XCTTestMethodConventionAsyncNonThrowing
+                                                         invocation:invocation
+                                                  customErrorMessage:@"async"];
+    ok("each convention keeps its own value",
+       [async.convention isEqualToNumber:@(XCTTestMethodConventionAsyncNonThrowing)] &&
+       ![async.convention isEqualToNumber:@(XCTTestMethodConventionStandard)], nil);
+
+    // The number form is the one the other two build on, so it has to agree.
+    XCTTestInvocationDescriptor *numbered =
+        [[XCTTestInvocationDescriptor alloc] initWithSelectorString:@"testNumbered"
+                                                    conventionNumber:@(XCTTestMethodConventionError)
+                                                         invocation:invocation
+                                                  customErrorMessage:@"numbered"];
+    ok("the number form stores the convention it was given",
+       [numbered.convention isEqualToNumber:@(XCTTestMethodConventionError)], nil);
+    ok("the number form and the enum form can express different values",
+       ![numbered.convention isEqualToNumber:standard.convention], nil);
+
+    // Names and messages are copied. A descriptor that shared the caller's
+    // string would change what test it claims to be after the fact.
+    // Copy, not share. Two descriptors built from one string must not end up
+    // storing the same object: the caller's string can be changed afterwards,
+    // and a descriptor that followed would quietly change which test it claims
+    // to be. Distinct-but-equal is what a copy looks like from the outside.
+    XCTTestInvocationDescriptor *copied =
+        [[XCTTestInvocationDescriptor alloc] initWithSelectorString:unstated.selectorString
+                                                         invocation:invocation
+                                                  customErrorMessage:unstated.customErrorMessage];
+    ok("a descriptor reads back what it was given",
+       [copied.selectorString isEqualToString:unstated.selectorString] &&
+       [copied.customErrorMessage isEqualToString:unstated.customErrorMessage], nil);
+    ok("the selector name is declared copy",
+       descriptorPropertyHasFlag("selectorString", 'C'), nil);
+    ok("the error message is declared copy",
+       descriptorPropertyHasFlag("customErrorMessage", 'C'), nil);
+    // The convention and the invocation are held, not copied: both are objects
+    // a test may still be using, and copying either would leave a descriptor
+    // describing something other than what will be run.
+    ok("the convention is held rather than copied",
+       !descriptorPropertyHasFlag("convention", 'C'), nil);
+    ok("the invocation is held rather than copied",
+       !descriptorPropertyHasFlag("invocation", 'C'), nil);
+
+    // The description names the class and the method, which is the pair that
+    // identifies a test when something goes wrong with running it.
+    ok("a descriptor describes itself as class and selector",
+       [unstated.description isEqualToString:@"<XCTTestInvocationDescriptor testExample>"],
+       unstated.description);
 }
 
 #pragma mark - Class from string
@@ -1531,6 +1656,7 @@ int main(void)
     testNaming();
     testAvailability();
     testMethodConventions();
+    testInvocationDescriptors();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();
