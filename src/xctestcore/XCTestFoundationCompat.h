@@ -81,11 +81,21 @@ NS_ASSUME_NONNULL_BEGIN
 // the guard.
 #if !__has_include(<Foundation/NSMethodSignature.h>)
 @interface NSMethodSignature : NSObject
+/// Builds a signature from a type encoding. The encoding is the one the
+/// compiler writes, so a block's parameters are not expanded here: "@?" stands
+/// for a block and says nothing about what that block takes.
++ (instancetype)signatureWithObjCTypes:(const char *)types;
 /// Number of bytes the return value occupies, so the caller can size the
 /// buffer it passes to -getReturnValue:.
 @property (readonly) NSUInteger methodReturnLength;
 /// Number of bytes each argument occupies, excluding the implicit self and _cmd.
 @property (readonly) NSUInteger frameLength;
+/// How many arguments the signature has, counted the way the runtime counts
+/// them: 0 is self and 1 is _cmd. A signature standing for a block has the
+/// block itself at index 0, so a handler that takes nothing has a count of 1.
+@property (readonly) NSUInteger numberOfArguments;
+/// The type encoding of the return value, or null when there is none to read.
+@property (readonly, nullable) const char *methodReturnType;
 @end
 
 @interface NSInvocation : NSObject

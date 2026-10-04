@@ -579,6 +579,104 @@ static void testMethodConventions(void)
        [[[XCTSuiteConstructionAsyncFixture class] testInvocations] count] == 0, nil);
 }
 
+#pragma mark - Async block signatures
+
+static void testAsyncBlockSignatures(void)
+{
+    printf("async block signatures\n");
+
+    // A block's type encoding does not expand what the block takes, so these
+    // stand in for the expanded signatures a caller obtains from the method
+    // itself. Argument 0 is the block, so a handler taking nothing has a count
+    // of one.
+    NSMethodSignature *takesNothing = [NSMethodSignature signatureWithObjCTypes:"v@?"];
+    NSMethodSignature *takesAnError = [NSMethodSignature signatureWithObjCTypes:"v@?@"];
+
+    ok("a block signature knows how many arguments the block has",
+       takesNothing.numberOfArguments == 1 && takesAnError.numberOfArguments == 2, nil);
+    ok("a block signature knows the block's return type",
+       takesNothing.methodReturnType != NULL && takesNothing.methodReturnType[0] == 'v', nil);
+
+    // No signature means no handler to have read a convention from.
+    ok("a missing block signature is not a test",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:Nil
+                                                                isThrowing:NULL], nil);
+
+    BOOL isThrowing = YES;
+    ok("a handler that takes nothing is a test",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:takesNothing
+                                                                isThrowing:&isThrowing] && !isThrowing, nil);
+
+    // Deferred: telling a handler that takes an NSError from one that takes
+    // nothing means naming the class of the block's first argument, which
+    // needs -_classForObjectAtArgumentIndex:. Until that lands such a handler
+    // is rejected rather than mistaken for one that cannot report a failure.
+    isThrowing = NO;
+    ok("a handler that takes an error is not yet recognised",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:takesAnError
+                                                                isThrowing:&isThrowing] && !isThrowing, nil);
+
+    // The method's own shape still has to be right.
+    ok("a method with a second argument is not a test",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:4
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:takesNothing
+                                                                isThrowing:NULL], nil);
+    ok("a method that returns a value is not a test",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'i'
+                                                firstBlockArgumentSignature:takesNothing
+                                                                isThrowing:NULL], nil);
+    // The handler is called by whoever waits, so a value from it is a
+    // different shape than the convention describes.
+    ok("a handler that returns a value is not a test",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:[NSMethodSignature signatureWithObjCTypes:"i@?"]
+                                                                isThrowing:NULL], nil);
+    ok("a handler with three arguments is not a test",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:[NSMethodSignature signatureWithObjCTypes:"v@?@@"]
+                                                                isThrowing:NULL], nil);
+
+    // Asking only the yes/no stays legitimate at this layer too.
+    ok("the throwing answer can be declined here",
+       [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'v'
+                                                firstBlockArgumentSignature:takesNothing
+                                                                isThrowing:NULL], nil);
+    // A method rejected before any verdict is reached must not overwrite an
+    // answer the caller already had.
+    isThrowing = YES;
+    ok("a rejected method leaves the throwing answer alone",
+       ![XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                              returnType:'i'
+                                                firstBlockArgumentSignature:takesNothing
+                                                                isThrowing:&isThrowing] && isThrowing, nil);
+
+    // The two layers have to agree, or the signature layer would be answering
+    // a question the primitive answers differently.
+    BOOL fromPrimitive = [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                                            returnType:'v'
+                                                                      blockArgumentCount:takesNothing.numberOfArguments
+                                                                       blockReturnType:takesNothing.methodReturnType[0]
+                                                                 blockFirstArgumentClass:Nil
+                                                                                isThrowing:NULL];
+    ok("the signature layer agrees with the shape it unpacks",
+       fromPrimitive ==
+           [XCTestCase isValidTestMethodUsingAsyncConventionWithArgumentCount:3
+                                                                 returnType:'v'
+                                                   firstBlockArgumentSignature:takesNothing
+                                                                 isThrowing:NULL], nil);
+}
+
 #pragma mark - Invocation descriptors
 
 // -copy on an immutable string hands back the same object, so identity cannot
@@ -1774,6 +1872,7 @@ int main(void)
     testNaming();
     testAvailability();
     testMethodConventions();
+    testAsyncBlockSignatures();
     testInvocationDescriptors();
     testClassFromString();
     testEmptySuite();

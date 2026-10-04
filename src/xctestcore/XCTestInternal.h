@@ -389,6 +389,10 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
                                                blockReturnType:(char)blockReturnType
                                      blockFirstArgumentClass:(Class _Nullable)blockFirstArgumentClass
                                                     isThrowing:(nullable BOOL *)isThrowing;
++ (BOOL)isValidTestMethodUsingAsyncConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                    returnType:(char)returnType
+                                      firstBlockArgumentSignature:(nullable NSMethodSignature *)firstBlockArgumentSignature
+                                                    isThrowing:(nullable BOOL *)isThrowing;
 @end
 
 /// A discovered test method, as the pieces needed to run it.

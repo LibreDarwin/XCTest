@@ -671,6 +671,30 @@ static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
     return NO;
 }
 
++ (BOOL)isValidTestMethodUsingAsyncConventionWithArgumentCount:(NSUInteger)argumentCount
+                                                    returnType:(char)returnType
+                                      firstBlockArgumentSignature:(NSMethodSignature *)firstBlockArgumentSignature
+                                                    isThrowing:(BOOL *)isThrowing
+{
+    // Without the handler's signature there is nothing to have a convention:
+    // a method that takes a handler always has one, so a missing signature
+    // means the caller could not find the handler rather than that there is
+    // no convention to report.
+    if (firstBlockArgumentSignature == Nil) {
+        return NO;
+    }
+    // The handler's own arguments and return value are what the convention is
+    // read from, never the test method's -- both are void with one argument,
+    // which is all a method has in common with a method that reports nothing.
+    const char *blockReturnType = firstBlockArgumentSignature.methodReturnType;
+    return [self isValidTestMethodUsingAsyncConventionWithArgumentCount:argumentCount
+                                                            returnType:returnType
+                                                  blockArgumentCount:firstBlockArgumentSignature.numberOfArguments
+                                                   blockReturnType:blockReturnType != NULL ? *blockReturnType : 0
+                                         blockFirstArgumentClass:Nil
+                                                        isThrowing:isThrowing];
+}
+
 + (NSArray<NSInvocation *> *)testInvocations
 {
     NSMutableDictionary<NSString *, NSValue *> *selectorsByName = [NSMutableDictionary dictionary];
