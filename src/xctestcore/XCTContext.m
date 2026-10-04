@@ -494,6 +494,83 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
     }
 }
 
+#pragma mark - Writing a note into the record
+
++ (void)_recordActivityMessageWithFormat:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2)
+{
+    // Both spellings do the same thing, and neither one looks at the context it
+    // was called on: a note belongs to whatever run is happening now, not to a
+    // context some caller happens to be holding. That is the whole reason the
+    // instance form exists -- so a caller that has a context in hand can say so
+    // without changing where the note lands.
+    XCTContext *context = [self currentContextIfAvailable];
+    if (context == nil) {
+        // The reference records this and carries on into the same path, where
+        // the activity then lands on a nil context and goes nowhere. Raising is
+        // this port's standing choice for an internal failure (see
+        // XCTContextRaiseAssertion above) -- it is the same condition either way,
+        // and a caller with nowhere to report to has already lost the thread the
+        // note belonged to.
+        //
+        // The wording is the reference's, in its capitalization. Both of the two
+        // spellings report the same text; the reference distinguishes them only
+        // by line number, which this port's assertion does not carry.
+        XCTContextRaiseAssertion(@"No context has been created for the current thread.",
+                                 @selector(_recordActivityMessageWithFormat:));
+    }
+
+    NSString *message = nil;
+    va_list arguments;
+    va_start(arguments, format);
+    message = [[NSString alloc] initWithFormat:format arguments:arguments];
+    va_end(arguments);
+
+    // Nothing to wrap, so the block does nothing. The note is the entire content
+    // of the activity: it says something happened, and the happening is not
+    // something that can be interrupted and resumed -- which is what makes an
+    // activity the right container for it even though it spans no work.
+    [context _runActivityNamed:message type:XCActivityTypeInternal
+                       block:^(id<XCTActivity> activity) { (void)activity; }];
+}
+
+- (void)_recordActivityMessageWithFormat:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2)
+{
+    // Named on the class rather than through self, which is the whole of the
+    // difference between this and the spelling above.
+    XCTContext *context = [XCTContext currentContextIfAvailable];
+    if (context == nil) {
+        XCTContextRaiseAssertion(@"No context has been created for the current thread.",
+                                 @selector(_recordActivityMessageWithFormat:));
+    }
+
+    NSString *message = nil;
+    va_list arguments;
+    va_start(arguments, format);
+    message = [[NSString alloc] initWithFormat:format arguments:arguments];
+    va_end(arguments);
+
+    [context _runActivityNamed:message type:XCActivityTypeInternal
+                       block:^(id<XCTActivity> activity) { (void)activity; }];
+}
+
+- (void)_reportEmptyActivityWithType:(NSString *)type
+                              format:(NSString *)format, ... NS_FORMAT_FUNCTION(2, 3)
+{
+    // Unlike a note, this one takes its type from the caller and needs no lookup:
+    // it reports into the context it was called on, so a caller that has already
+    // chosen a type and a context is not made to re-find either. A nil context
+    // reports nothing, which is the same outcome as any other message sent to
+    // nothing -- and there is nothing to assert here, because unlike a note the
+    // caller named the destination.
+    NSString *message = nil;
+    va_list arguments;
+    va_start(arguments, format);
+    message = [[NSString alloc] initWithFormat:format arguments:arguments];
+    va_end(arguments);
+
+    [self _runActivityNamed:message type:type block:^(id<XCTActivity> activity) { (void)activity; }];
+}
+
 #pragma mark - Running a block in a child context
 
 + (void)runInContextForTestCase:(XCTestCase *_Nullable)testCase

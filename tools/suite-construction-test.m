@@ -1186,6 +1186,152 @@ static void testChildContext(void)
     [center removeTestObserver:observer];
 }
 
+// Runs a block on a thread that has no context, and waits for it.
+//
+// Off the main thread is the only place "no context" is a condition that can
+// occur at all: the main thread adopts a root context when it has none, so a
+// lookup there always succeeds and a nil-context path is unreachable from it.
+@interface OffMainThreadRunner : NSObject
+@property (atomic) BOOL finished;
+@property (atomic) BOOL raised;
+@property (atomic, nullable, copy) NSString *reason;
+@end
+
+@implementation OffMainThreadRunner
+
+- (void)run
+{
+    @try {
+        [XCTContext _recordActivityMessageWithFormat:@"Where does this go?"];
+    } @catch (NSException *exception) {
+        self.raised = YES;
+        self.reason = exception.reason;
+    }
+    self.finished = YES;
+}
+
+@end
+
+static void runOffMainThread(OffMainThreadRunner *runner, ActivityObserverFixture *observer, NSUInteger *outCount)
+{
+    NSThread *thread = [[NSThread alloc] initWithTarget:runner selector:@selector(run) object:nil];
+    [thread start];
+    // The main thread only sleeps here, so nothing else can touch the observer
+    // while the worker runs: whatever count it finds is the worker's doing.
+    while (!runner.finished) {
+        [NSThread sleepForTimeInterval:0.01];
+    }
+    *outCount = observer.startCount;
+}
+
+// Three ways to write into the record without doing any work. None of them runs
+// a block, so what matters is entirely what lands: which type it is, what it is
+// called, and which context it is reported into.
+static void testEmptyActivities(void)
+{
+    printf("\nempty activities\n");
+
+    XCTestObservationCenter *center = [XCTestObservationCenter sharedTestObservationCenter];
+    ActivityObserverFixture *observer = [[ActivityObserverFixture alloc] init];
+    [center addTestObserver:observer];
+    XCTestConfiguration *configuration = XCTestConfiguration.activeTestConfiguration;
+
+    // The surprise comes first: a note is internal, and a plain unit-test run
+    // reports no internal activities, so this whole family writes nothing into a
+    // report unless the run asked for them. Worth stating plainly, because
+    // "record this" reads like it always records something.
+    NSUInteger before = observer.startCount;
+    [XCTContext _recordActivityMessageWithFormat:@"Invisible in a unit-test run"];
+    ok("a note in a unit-test run reports nothing", observer.startCount == before, nil);
+    ok("but did not fault either", YES, nil);
+
+    // What lands, and where, is only visible in a run that keeps internal
+    // activities. Everything below is in UI-test mode for that reason.
+    configuration.initializeForUITesting = YES;
+
+    // A note is internal by type, not by name: nothing in the message says so,
+    // and a reader has to be able to tell a note from a test's own activity.
+    before = observer.startCount;
+    [XCTContext _recordActivityMessageWithFormat:@"Kept %d of %d attachments", 3, 7];
+    ok("the note was reported", observer.startCount == before + 1, nil);
+    ok("the note is called what it said",
+       [observer.startActivity.title isEqualToString:@"Kept 3 of 7 attachments"], nil);
+    ok("a note is an internal activity, not a user-created one",
+       [observer.startActivity.activityType isEqualToString:@"com.apple.dt.xctest.activity-type.internal"],
+       observer.startActivity.activityType);
+    ok("the note started and finished inside the call",
+       observer.finishCount == before + 1, nil);
+    ok("a note landed in the context that was running",
+       observer.startContext == [XCTContext currentContextIfAvailable], nil);
+
+    // Both spellings agree, including on ignoring the context they were called
+    // on. That is what the instance form is for: a caller with a context in hand
+    // says so and gets the same destination anyway.
+    __block XCTContext *elsewhere = nil;
+    [XCTContext runInContextForTestCase:nil block:^{
+        elsewhere = [XCTContext currentContextIfAvailable];
+    }];
+    before = observer.startCount;
+    [elsewhere _recordActivityMessageWithFormat:@"Sent from a context of its own"];
+    ok("the instance spelling also reported", observer.startCount == before + 1, nil);
+    ok("and landed in the run that was happening, not in the context it was sent from",
+       observer.startContext == [XCTContext currentContextIfAvailable], nil);
+    ok("the context it was sent from is not the one that got it",
+       observer.startContext != elsewhere, nil);
+
+    // An empty activity is the same idea with both choices left to the caller:
+    // the type is named here rather than fixed, and the destination is this
+    // context rather than the running one. That is what makes it usable by
+    // something that has already picked a context out.
+    XCTContext *reporting = [XCTContext currentContextIfAvailable];
+    before = observer.startCount;
+    [reporting _reportEmptyActivityWithType:@"com.apple.dt.xctest.activity-type.userCreated"
+                                     format:@"Screenshot %ld of %ld", 2L, 5L];
+    ok("the empty activity was reported", observer.startCount == before + 1, nil);
+    ok("with the type the caller named",
+       [observer.startActivity.activityType isEqualToString:@"com.apple.dt.xctest.activity-type.userCreated"],
+       observer.startActivity.activityType);
+    ok("and the message it formatted",
+       [observer.startActivity.title isEqualToString:@"Screenshot 2 of 5"], nil);
+    ok("reported into the context it was called on",
+       observer.startContext == reporting, nil);
+
+    // A caller may name a type this port has never heard of. The type is data,
+    // not a case in a switch, and a caller that knows what it is doing should not
+    // have to have it registered here first.
+    [reporting _reportEmptyActivityWithType:@"com.example.activity-type.ours"
+                                     format:@"A type XCTest has never heard of"];
+    ok("an unknown type is carried through untouched",
+       [observer.startActivity.activityType isEqualToString:@"com.example.activity-type.ours"],
+       observer.startActivity.activityType);
+
+    // Formatting is the point, and %@ has to work like everywhere else. This is
+    // the failure that would be easy to ship: a message that reports "3 and 7"
+    // instead of "3 of 7" is still an activity, and still looks fine.
+    [XCTContext _recordActivityMessageWithFormat:@"%@ passed in %@", @"FailingTests", @1];
+    ok("arguments are formatted, not printed as pointers",
+       [observer.startActivity.title isEqualToString:@"FailingTests passed in 1"],
+       observer.startActivity.title);
+
+    // A note with nowhere to go is a fault, not a silent no-op: the caller has
+    // lost the run the note was for, and pretending otherwise loses the note.
+    // (Raising rather than continuing is this port's standing choice for an
+    // internal failure; see XCTContextRaiseAssertion in XCTContext.m.)
+    before = observer.startCount;
+    OffMainThreadRunner *runner = [[OffMainThreadRunner alloc] init];
+    NSUInteger offMainCount = 0;
+    runOffMainThread(runner, observer, &offMainCount);
+    ok("a note with no run to join is a fault", runner.raised, nil);
+    ok("and says which condition failed",
+       runner.reason != nil && [runner.reason rangeOfString:@"No context has been created"].location != NSNotFound,
+       runner.reason);
+    ok("and nothing was reported for it", offMainCount == before, nil);
+    ok("and the main thread's run was left alone", observer.startCount == before, nil);
+
+    configuration.initializeForUITesting = NO;
+    [center removeTestObserver:observer];
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
@@ -1205,6 +1351,7 @@ int main(void)
     testEmptySuiteInclusion();
     testCaseSuiteLifecycle();
     testChildContext();
+    testEmptyActivities();
     testActivityReportingFilter();
     testActivityObservation();
     testActivityRecord();

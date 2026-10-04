@@ -730,6 +730,33 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 - (void)runInternalActivityNamed:(NSString *)name
                            block:(XCT_NOESCAPE void (^)(id<XCTActivity> activity))block;
 
+/// Writes a formatted note into the record, with no work attached to it.
+///
+/// The type is fixed at internal, so a reader can tell a note from something a
+/// test asked for. This is for a fact worth recording that is not itself a piece
+/// of work: an attachment was written, a screenshot was taken, a file went
+/// missing. Those have nothing to wrap, so the activity spans no block and its
+/// whole content is the message.
+///
+/// Both spellings report into the context running on this thread and ignore the
+/// context they were called on. A note belongs to the run that is happening now,
+/// so the instance form exists for callers that have a context to hand and would
+/// rather say so than have it ignored.
++ (void)_recordActivityMessageWithFormat:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
+
+- (void)_recordActivityMessageWithFormat:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
+
+/// Reports a formatted message as an activity of `type` with no work attached,
+/// into this context.
+///
+/// The same shape as a note, with both choices left to the caller: the type,
+/// because the caller is the only one that knows what kind of thing happened,
+/// and the destination, because a caller that already has a context should not be
+/// made to look one up. There is no assertion for a missing context here -- the
+/// destination was named, so a nil one reports nothing rather than being a fault.
+- (void)_reportEmptyActivityWithType:(NSString *)type
+                              format:(NSString *)format, ... NS_FORMAT_FUNCTION(2, 3);
+
 /// Whether an activity of `type` is one a run in `inTestMode` reports.
 ///
 /// Split from -_shouldReportActivityWithType: so the answer can be had without a
