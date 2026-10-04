@@ -656,6 +656,48 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 /// YES when a context is running on this thread.
 + (BOOL)hasCurrentContext;
 
+/// Runs `block` in a new context that reports into whatever is running here.
+///
+/// This is how a test gets a context of its own to run asynchronous work in: the
+/// child is pushed for the length of the block, so activities started inside it
+/// unwind with it and cannot outlive it.
+///
+/// The child is unwound even if `block` throws -- its activities are closed, it is
+/// taken off the stack, and it is invalidated, in that order -- because a context
+/// left on the stack would go on accepting activities that nothing can report.
++ (void)runInContextForTestCase:(nullable XCTestCase *)testCase
+                           block:(XCT_NOESCAPE void (^)(void))block;
+
+/// The same, saying whether the child is the one activities should be reported
+/// into directly rather than gathered under.
+///
+/// A reporting base is what -reportingBaseContext walks up to, so marking one
+/// here is what lets a child's activities land in the report instead of under
+/// whatever was already running.
++ (void)runInContextForTestCase:(nullable XCTestCase *)testCase
+              markAsReportingBase:(BOOL)markAsReportingBase
+                           block:(XCT_NOESCAPE void (^)(void))block;
+
+/// The same, with the parent named rather than taken from the thread.
+- (void)runInContextForTestCase:(nullable XCTestCase *)testCase
+                           block:(XCT_NOESCAPE void (^)(void))block;
+
+- (void)runInContextForTestCase:(nullable XCTestCase *)testCase
+              markAsReportingBase:(BOOL)markAsReportingBase
+                           block:(XCT_NOESCAPE void (^)(void))block;
+
+/// The child context itself, which is what the two forms above are thin wrappers
+/// around.
+///
+/// `context` may be nil, which makes the child a root. Split out because it is
+/// the only place that pushes and pops, so a caller that wants to parent
+/// somewhere other than the running context does not have to reimplement the
+/// unwinding.
++ (void)_runInChildOfContext:(nullable XCTContext *)context
+                  forTestCase:(nullable XCTestCase *)testCase
+          markAsReportingBase:(BOOL)markAsReportingBase
+                       block:(XCT_NOESCAPE void (^)(void))block;
+
 /// The innermost context running on this thread. Raises rather than returning
 /// nil: every caller needs one, and a nil here would only surface later, further
 /// from the thread that lost it.

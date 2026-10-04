@@ -1042,6 +1042,150 @@ static void testEmptySuiteInclusion(void)
     ok("a case suite with tests is included", [populated shouldIncludeWhenIncludingEmptySuites], nil);
 }
 
+// A child context exists so that work started inside it can be unwound with it.
+// Everything about that is a claim about ordering -- pushed before, unwound
+// after, removed in between -- so these checks are mostly about the sequence
+// rather than about any one value.
+static void testChildContext(void)
+{
+    printf("\nchild context\n");
+
+    XCTestObservationCenter *center = [XCTestObservationCenter sharedTestObservationCenter];
+    ActivityObserverFixture *observer = [[ActivityObserverFixture alloc] init];
+    [center addTestObserver:observer];
+
+    XCTContext *outer = [XCTContext currentContextIfAvailable];
+    ok("the outer context is the one running", [XCTContext currentContextIfAvailable] == outer, nil);
+
+    __block XCTContext *child = nil;
+    __block XCTContext *innerWhileRunning = nil;
+    NSUInteger outerDepth = outer.activityRecordStackDepth;
+
+    [XCTContext runInContextForTestCase:nil block:^{
+        child = [XCTContext currentContextIfAvailable];
+        innerWhileRunning = child;
+        ok("the child is the context running inside the block", child != outer, nil);
+        ok("the child is on the stack above the outer one",
+           child.isBoundToCurrentThread && outer.isBoundToCurrentThread, nil);
+        ok("the child starts empty", child.activityRecordStackDepth == 0, nil);
+        ok("the child has no test case when none was given", child.testCase == nil, nil);
+    }];
+
+    ok("the block ran", child != nil, nil);
+    ok("the child is gone from the stack once the block returns",
+       ![child isBoundToCurrentThread], nil);
+    ok("the outer context is running again",
+       [XCTContext currentContextIfAvailable] == outer, nil);
+    ok("the outer context's depth is untouched", outer.activityRecordStackDepth == outerDepth, nil);
+    ok("the child was invalidated on the way out", !child.isValid, nil);
+
+    // The parent is named, not implied: the child hangs off what it was given,
+    // and the reporting base is fixed at that moment rather than being asked for.
+    __block XCTContext *childUnderOuter = nil;
+    __block XCTContext *baseWhileRunning = nil;
+    [outer runInContextForTestCase:nil block:^{
+        childUnderOuter = [XCTContext currentContextIfAvailable];
+        baseWhileRunning = childUnderOuter.reportingBaseContext;
+    }];
+    ok("the child hangs off the context it was named under",
+       childUnderOuter.parent == outer, nil);
+    ok("a child that is not a reporting base has no reporting base of its own",
+       !childUnderOuter.isReportingBase, nil);
+    ok("nothing is a reporting base here, so there is none to report to",
+       baseWhileRunning == nil, nil);
+
+    // Marked as the base, it is its own answer. This is the difference
+    // markAsReportingBase: exists to make: activities under it report here rather
+    // than being gathered under whatever was already running.
+    __block XCTContext *marked = nil;
+    __block XCTContext *markedBaseWhileRunning = nil;
+    [XCTContext runInContextForTestCase:nil markAsReportingBase:YES block:^{
+        marked = [XCTContext currentContextIfAvailable];
+        markedBaseWhileRunning = marked.reportingBaseContext;
+    }];
+    ok("a reporting base is marked", marked.isReportingBase, nil);
+    ok("a reporting base is its own reporting base",
+       markedBaseWhileRunning == marked, nil);
+
+    // The walk, not just the self-answer: a plain child under a reporting base
+    // finds that base rather than itself, which is what lets a nested run report
+    // where it was told to rather than wherever it happens to sit.
+    __block XCTContext *grandchild = nil;
+    __block XCTContext *grandchildBase = nil;
+    [XCTContext runInContextForTestCase:nil markAsReportingBase:YES block:^{
+        XCTContext *middle = [XCTContext currentContextIfAvailable];
+        [middle runInContextForTestCase:nil block:^{
+            grandchild = [XCTContext currentContextIfAvailable];
+            grandchildBase = grandchild.reportingBaseContext;
+        }];
+    }];
+    ok("a plain child under a reporting base is not one itself",
+       !grandchild.isReportingBase, nil);
+    ok("a plain child under a reporting base finds it",
+       grandchildBase != grandchild && grandchildBase != nil, nil);
+
+    // A test case is carried, weakly, and read back out.
+    XCTSuiteConstructionPlainFixture *testCase = [[XCTSuiteConstructionPlainFixture alloc] init];
+    __block XCTContext *withTestCase = nil;
+    [XCTContext runInContextForTestCase:testCase block:^{
+        withTestCase = [XCTContext currentContextIfAvailable];
+    }];
+    ok("the child knows its test case", withTestCase.testCase == testCase, nil);
+
+    // Activities started inside the child unwind with it, and are reported against
+    // the child rather than the outer context -- which is the whole reason for
+    // having a child.
+    XCTestCase *outerCase = [[XCTSuiteConstructionPlainFixture alloc] init];
+    NSUInteger before = observer.startCount;
+    [outer runInContextForTestCase:outerCase block:^{
+        XCTContext *inner = [XCTContext currentContextIfAvailable];
+        [inner _runActivityNamed:@"Inside child"
+                             type:@"com.apple.dt.xctest.activity-type.userCreated"
+                            block:^(id<XCTActivity> activity) {
+            (void)activity;
+            ok("the activity lands in the child", observer.startContext == inner, nil);
+            ok("the outer context's stack is not disturbed",
+               outer.activityRecordStackDepth == outerDepth, nil);
+        }];
+    }];
+    ok("the activity was reported", observer.startCount == before + 1, nil);
+    ok("it was reported before the block left", observer.finishCount == before + 1, nil);
+
+    // A block that throws still unwinds. This is the case that decides whether the
+    // @finally is there at all: a context left valid and on the stack would go on
+    // accepting activities that nothing can report, and every later lookup of the
+    // running context would find the wrong one.
+    __block XCTContext *thrownFrom = nil;
+    NSUInteger depthBeforeThrow = [XCTContext currentContextIfAvailable].activityRecordStackDepth;
+    BOOL raised = NO;
+    @try {
+        [XCTContext runInContextForTestCase:nil block:^{
+            thrownFrom = [XCTContext currentContextIfAvailable];
+            [thrownFrom _runActivityNamed:@"Never finished"
+                                      type:@"com.apple.dt.xctest.activity-type.userCreated"
+                                     block:^(id<XCTActivity> activity) {
+                (void)activity;
+                // Thrown with an activity still open, on purpose: the point is
+                // what happens to that activity afterwards.
+                [NSException raise:NSInternalInconsistencyException format:@"thrown from inside"];
+            }];
+        }];
+    } @catch (NSException *exception) {
+        raised = YES;
+    }
+    ok("the exception came out", raised, nil);
+    ok("the child was still taken off the stack",
+       ![thrownFrom isBoundToCurrentThread], nil);
+    ok("the child was still invalidated", !thrownFrom.isValid, nil);
+    ok("the outer context is running again, depth intact",
+       [XCTContext currentContextIfAvailable].activityRecordStackDepth == depthBeforeThrow,
+       nil);
+    ok("the activity the throw left open was finished anyway",
+       thrownFrom.topActivity == nil, nil);
+
+    [center removeTestObserver:observer];
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
@@ -1060,6 +1204,7 @@ int main(void)
     testEmptySuite();
     testEmptySuiteInclusion();
     testCaseSuiteLifecycle();
+    testChildContext();
     testActivityReportingFilter();
     testActivityObservation();
     testActivityRecord();

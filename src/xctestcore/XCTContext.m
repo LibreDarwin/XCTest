@@ -284,11 +284,6 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
     return _isReportingBase;
 }
 
-- (void)setIsReportingBase:(BOOL)isReportingBase
-{
-    _isReportingBase = isReportingBase;
-}
-
 - (nullable id)associatedObjectForKey:(NSString *)key
 {
     return _associatedObjects[key];
@@ -496,6 +491,79 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
         } @finally {
             [self didFinishActivity:activity];
         }
+    }
+}
+
+#pragma mark - Running a block in a child context
+
++ (void)runInContextForTestCase:(XCTestCase *_Nullable)testCase
+                           block:(XCT_NOESCAPE void (^)(void))block
+{
+    [self runInContextForTestCase:testCase markAsReportingBase:NO block:block];
+}
+
++ (void)runInContextForTestCase:(XCTestCase *_Nullable)testCase
+              markAsReportingBase:(BOOL)markAsReportingBase
+                           block:(XCT_NOESCAPE void (^)(void))block
+{
+    // Under whatever is running here, rather than under a context named by the
+    // caller. A test that is given a child context is given one inside the run it
+    // is part of; choosing the parent here is what makes the class form and the
+    // instance form differ at all.
+    [self _runInChildOfContext:[self currentContextIfAvailable]
+                    forTestCase:testCase
+            markAsReportingBase:markAsReportingBase
+                         block:block];
+}
+
+- (void)runInContextForTestCase:(XCTestCase *_Nullable)testCase
+                           block:(XCT_NOESCAPE void (^)(void))block
+{
+    [self runInContextForTestCase:testCase markAsReportingBase:NO block:block];
+}
+
+- (void)runInContextForTestCase:(XCTestCase *_Nullable)testCase
+              markAsReportingBase:(BOOL)markAsReportingBase
+                           block:(XCT_NOESCAPE void (^)(void))block
+{
+    // Under self, so that the child hangs off the context named here rather than
+    // off whatever happens to be innermost when this is called.
+    [[self class] _runInChildOfContext:self
+                             forTestCase:testCase
+                     markAsReportingBase:markAsReportingBase
+                                  block:block];
+}
+
++ (void)_runInChildOfContext:(nullable XCTContext *)context
+                  forTestCase:(nullable XCTestCase *)testCase
+          markAsReportingBase:(BOOL)markAsReportingBase
+                       block:(XCT_NOESCAPE void (^)(void))block
+{
+    XCTContext *child = [[XCTContext alloc] initWithParent:context testCase:testCase];
+    // Straight to the ivar rather than through a setter, because there is no
+    // setter: whether a context is a reporting base is fixed when it is made,
+    // and a caller that could change it later could move a property that other
+    // contexts have already walked past.
+    child->_isReportingBase = markAsReportingBase;
+
+    NSMutableArray<XCTContext *> *stack = [[NSThread currentThread] xct_contextStack];
+    // Pushed before the block rather than around it, so that anything the block
+    // starts -- including a nested child of its own -- is recorded under this one
+    // and unwinds with it.
+    [stack addObject:child];
+    @try {
+        block();
+    } @finally {
+        // @finally, and in this order, because the three are not independent.
+        // Unwinding first closes the activities the block left open; removing the
+        // context next stops anything outside the block from naming it as
+        // current; invalidating last is what makes the context refuse the work it
+        // would otherwise still accept. A block that throws has still run all of
+        // it, and a context left valid and on the stack would go on accepting
+        // activities that can never be reported anywhere.
+        [child unwindRemainingActivities];
+        [stack removeObject:child];
+        [child invalidate];
     }
 }
 
