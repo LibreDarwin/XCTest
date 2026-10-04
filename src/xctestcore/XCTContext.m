@@ -74,6 +74,11 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
     // strong reference would keep a finished test case and everything it holds
     // alive until the last context referencing it was released.
     __weak XCTestCase *_testCase;
+    // Weak for the same reason, and for the same reason it is declared in the
+    // category below rather than left to be synthesized: a category cannot add
+    // storage, so the backing ivar has to be written out here. The reference has
+    // a real one too, at offset 0x38, reached through objc_loadWeakRetained.
+    __weak id<XCTContextDelegate> _delegate;
     XCTActivityRecordStack *_activityRecordStack;
     NSDate *_startDate;
     NSMutableDictionary<NSString *, id> *_associatedObjects;
@@ -282,6 +287,16 @@ static void XCTContextRaiseAssertion(NSString *description, SEL method)
 - (BOOL)isReportingBase
 {
     return _isReportingBase;
+}
+
+- (nullable id<XCTContextDelegate>)delegate
+{
+    return _delegate;
+}
+
+- (void)setDelegate:(nullable id<XCTContextDelegate>)delegate
+{
+    _delegate = delegate;
 }
 
 - (nullable id)associatedObjectForKey:(NSString *)key

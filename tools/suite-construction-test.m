@@ -1332,6 +1332,52 @@ static void testEmptyActivities(void)
     [center removeTestObserver:observer];
 }
 
+// A delegate is a back-reference, and the direction of ownership is the whole
+// point of it. Worth checking with an object that can be watched dying.
+@interface WatchedDelegate : NSObject <XCTContextDelegate>
+@property (atomic) BOOL deallocated;
+@end
+
+@implementation WatchedDelegate
+
+- (void)dealloc
+{
+    self.deallocated = YES;
+}
+
+@end
+
+static void testContextDelegate(void)
+{
+    printf("\ncontext delegate\n");
+
+    XCTContext *context = [XCTContext currentContextIfAvailable];
+    ok("a context starts with no delegate", context.delegate == nil, nil);
+
+    WatchedDelegate *delegate = [[WatchedDelegate alloc] init];
+    context.delegate = delegate;
+    ok("the delegate reads back", context.delegate == delegate, nil);
+
+    // Weak is the property here, and it is checkable rather than merely declared:
+    // a context that kept its delegate alive would keep a whole runner graph
+    // alive behind it for as long as anything held the context.
+    __weak WatchedDelegate *weakDelegate = delegate;
+    delegate = nil;
+    ok("a context does not keep its delegate alive",
+       weakDelegate == nil, nil);
+    ok("and the delegate reads back as gone once it is", context.delegate == nil, nil);
+
+    // A delegate that outlives the context is fine -- nothing here is symmetric,
+    // and that asymmetry is the point.
+    WatchedDelegate *survivor = [[WatchedDelegate alloc] init];
+    context.delegate = survivor;
+    ok("a delegate may outlive the context that named it",
+       context.delegate == survivor, nil);
+    context.delegate = nil;
+    ok("and clearing it lets the context forget", context.delegate == nil, nil);
+    ok("without disturbing the delegate itself", survivor.deallocated == NO, nil);
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
@@ -1352,6 +1398,7 @@ int main(void)
     testCaseSuiteLifecycle();
     testChildContext();
     testEmptyActivities();
+    testContextDelegate();
     testActivityReportingFilter();
     testActivityObservation();
     testActivityRecord();

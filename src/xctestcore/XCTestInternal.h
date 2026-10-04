@@ -545,6 +545,16 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 /// Deliberately a category rather than an addition to the public
 /// <XCTest/XCTContext.h>: the reference does not publish this, and it is not
 /// meaningful to a test author.
+/// What a context answers to for questions it does not have an answer for.
+///
+/// Declared without any requirement on purpose. The reference names this
+/// protocol on the ivar and nothing else in the framework is known to conform to
+/// it, so it is empty there too: adding methods would be inventing a contract
+/// that no one is known to implement, and a protocol that can be adopted without
+/// promising anything is still better than one that lies about what it asks.
+@protocol XCTContextDelegate <NSObject>
+@end
+
 @interface XCTContext (XCTInternalContext)
 
 /// YES when this context's activities exist only to carry something the reader
@@ -645,6 +655,14 @@ XCT_EXPORT BOOL XCTTestCaseClassIsAvailable(Class testCaseClass);
 
 /// The observer registry to report this context's activities to.
 @property (readonly) XCTestObservationCenter *observationCenter;
+
+/// The object that decides where this context's activities end up.
+///
+/// Readwrite and weak. Weak because the relationship runs the other way from the
+/// usual one -- a delegate does not own the object it speaks for, and a context
+/// that kept its delegate alive would keep a whole runner graph alive behind it
+/// for as long as anything held the context.
+@property (weak, nullable) id<XCTContextDelegate> delegate;
 
 /// The innermost context running on this thread, or nil.
 ///
