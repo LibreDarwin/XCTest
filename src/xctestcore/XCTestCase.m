@@ -980,6 +980,56 @@ static struct {
     return [descriptors copy];
 }
 
++ (void)_collectTestInvocationDescriptorsForClassHierarchyIntoDictionary:(NSMutableDictionary<NSString *, XCTTestInvocationDescriptor *> *)dictionary
+{
+    // Iterative rather than recursive: the reference recurses once per class, and
+    // a hierarchy as deep as a user can build by subclassing test cases would put
+    // one frame per class on the stack to do this. The stop condition is the
+    // reference's -- the walk continues while the current class's superclass is
+    // not XCTestCase -- so the class directly below XCTestCase is the last one
+    // contributed.
+    for (Class cls = self; cls != Nil; cls = class_getSuperclass(cls)) {
+        for (XCTTestInvocationDescriptor *descriptor in [cls _testMethodInvocationDescriptors]) {
+            NSString *name = descriptor.selectorString;
+            // Asked for once, as the descriptor spells it, and used for both the
+            // lookup and the store: a name derived any other way could leave two
+            // spellings of one method in the dictionary.
+            if (dictionary[name] == nil) {
+                dictionary[name] = descriptor;
+            }
+        }
+        if (class_getSuperclass(cls) == [XCTestCase class]) {
+            break;
+        }
+    }
+}
+
++ (NSArray *)_allTestMethodInvocationDescriptors
+{
+    NSMutableDictionary<NSString *, XCTTestInvocationDescriptor *> *byName =
+        [NSMutableDictionary dictionary];
+    [self _collectTestInvocationDescriptorsForClassHierarchyIntoDictionary:byName];
+
+    // Gathered by enumeration rather than through -allValues, which the reduced
+    // header set does not declare on NSDictionary. Enumeration order is
+    // unspecified, which does not matter: the array is sorted immediately below,
+    // so the unspecified order is discarded before anything can observe it.
+    NSMutableArray<XCTTestInvocationDescriptor *> *descriptors =
+        [NSMutableArray arrayWithCapacity:byName.count];
+    for (NSString *name in byName) {
+        [descriptors addObject:byName[name]];
+    }
+
+    return [descriptors sortedArrayUsingComparator:^NSComparisonResult(XCTTestInvocationDescriptor *left, XCTTestInvocationDescriptor *right) {
+        // Case-insensitive, matching the reference at 0x1c864. +testInvocations
+        // orders the same names case-sensitively, so the two can disagree -- testFoo
+        // before testbar under one and after it under the other -- and that
+        // difference is reproduced rather than resolved: which order a run uses
+        // is observable, and picking one to be tidy would change it.
+        return [left.selectorString caseInsensitiveCompare:right.selectorString];
+    }];
+}
+
 /// Sorts a set of classes by class name, with the Swift module stripped, so a
 /// run is reproducible across processes -- where the runtime's class-list order
 /// is not. Sorting by the name a user would write is what the reference does;

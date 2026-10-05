@@ -58,6 +58,7 @@ XCT_EXPORT NSString *_XCTClassNameWithoutModuleFromClass(Class cls);
 @class XCTTestIdentifierSet;
 @class XCTestCase;
 @class XCTestObservationCenter;
+@class XCTTestInvocationDescriptor;
 
 /// A source of arbitrary unsigned numbers, supplied by the runner so a run can
 /// be made reproducible from a seed. A block rather than an object because the
@@ -292,8 +293,9 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// different answer. It reads the receiver's own method list -- it does not walk
 /// up the hierarchy, does not let a subclass shadow a superclass method, and
 /// does not sort. "What did this class declare" and "which tests may run here"
-/// are different questions, and the reference keeps both. Nothing consumes this
-/// yet: the suite construction that would is not ported.
+/// are different questions, and the reference keeps both. The wider question is
+/// _allTestMethodInvocationDescriptors, which is what the suite construction
+/// actually uses.
 ///
 /// A method that raises while being turned into an invocation still produces a
 /// descriptor, one carrying the reason and no invocation. The reason is that a
@@ -307,6 +309,39 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// can ask for the hook, and a stub that always declined would be a lie with a
 /// call site.
 + (NSArray *)_testMethodInvocationDescriptors;
+
+/// Collects the descriptors a class hierarchy contributes into a dictionary,
+/// keyed by selector name.
+///
+/// The caller owns the dictionary. Writing through a caller-supplied object
+/// rather than returning one is what lets a hierarchy of any depth be walked
+/// iteratively here, where the reference recurses.
+///
+/// The dictionary is how shadowing is resolved: the subclass is consulted first
+/// and only the first descriptor to claim a name keeps it, so a subclass's
+/// version of an inherited test survives and the superclass's copy of the same
+/// name is dropped rather than replacing it. That precedence is what makes a
+/// redefined test run as the subclass wrote it. Keys are the descriptors' own
+/// selectorString, so the name is asked for once and both the key and any later
+/// comparison agree.
+///
+/// The walk stops below XCTestCase: XCTestCase and the classes above it are
+/// framework plumbing, not tests, and a "test"-prefixed method there is
+/// infrastructure that happens to share a name.
++ (void)_collectTestInvocationDescriptorsForClassHierarchyIntoDictionary:(NSMutableDictionary<NSString *, XCTTestInvocationDescriptor *> *)dictionary;
+
+/// Every test method a class and its superclasses contribute, as one sorted list.
+///
+/// This is the whole hierarchy rather than the receiver's own methods: it
+/// collects through _collectTestInvocationDescriptorsForClassHierarchyIntoDictionary:,
+/// which applies the subclass-wins rule, and then orders the result.
+///
+/// The order is by selector name, case-insensitively, and that is not
+/// interchangeable with the case-sensitive order +testInvocations produces. It
+/// is a run order, so it is reproduced as the reference spells it -- including
+/// where it differs from the neighbouring method -- rather than "corrected" to
+/// match.
++ (NSArray *)_allTestMethodInvocationDescriptors;
 
 @end
 

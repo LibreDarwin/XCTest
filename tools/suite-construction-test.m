@@ -187,7 +187,8 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 
 // Subclasses the fixture above, to tell "what this class declared" apart from
 // "what may run here": discovery must report neither the inherited methods nor
-// any shadowing, because the walk that resolves both belongs to +testInvocations.
+// any shadowing, because resolving both belongs to the methods that walk the
+// hierarchy -- +testInvocations, and _allTestMethodInvocationDescriptors.
 @interface XCTSuiteConstructionDiscoverySubclass : XCTSuiteConstructionDiscoveryFixture
 - (void)testStandard;
 - (void)testOnlyOnTheSubclass;
@@ -197,6 +198,23 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 {
 }
 - (void)testOnlyOnTheSubclass
+{
+}
+@end
+
+// Two names whose order depends on whether case counts. "testZebra" precedes
+// "testapple" when uppercase sorts below lowercase, and follows it when the
+// comparison ignores case. Naming the pair this way is the only way to tell the
+// two orders apart, since no two spellings of the same word can disagree.
+@interface XCTSuiteConstructionCaseFixture : XCTestCase
+- (void)testZebra;
+- (void)testapple;
+@end
+@implementation XCTSuiteConstructionCaseFixture
+- (void)testZebra
+{
+}
+- (void)testapple
 {
 }
 @end
@@ -1245,6 +1263,132 @@ static void testMethodInvocationDescriptors(void)
         refusedMutation = YES;
     }
     ok("the answer cannot be edited by the caller", refusedMutation,
+       @"an immutable array accepted an addition");
+}
+
+/// The selector names in an order, so a failure can say which order came out.
+///
+/// Built by hand rather than through -valueForKey:, which the reduced header set
+/// does not declare on NSArray.
+static NSString *joinedSelectorNames(NSArray *descriptors)
+{
+    NSMutableString *joined = [NSMutableString string];
+    for (XCTTestInvocationDescriptor *descriptor in descriptors) {
+        if (joined.length > 0) {
+            [joined appendString:@", "];
+        }
+        [joined appendString:descriptor.selectorString];
+    }
+    return joined;
+}
+
+static void testAllMethodInvocationDescriptors(void)
+{
+    printf("all method invocation descriptors\n");
+
+    // A subclass sees what its superclass contributed. This is the difference
+    // between the two questions: the receiver's own scan reports two
+    // descriptors for the subclass fixture, and this one reports the whole
+    // hierarchy's contribution.
+    NSArray *all = [XCTSuiteConstructionDiscoverySubclass _allTestMethodInvocationDescriptors];
+    ok("the hierarchy's own tests are included", ({
+        countNamed(all, @"testReportsThroughAnError:") == 1 &&
+            countNamed(all, @"testOnlyOnTheSubclass") == 1;
+    }), joinedSelectorNames(all));
+
+    // A redefined test is one test, not two. The dictionary is keyed by name, so
+    // a shadowed superclass method is dropped rather than added alongside.
+    ok("a shadowed method is reported once", countNamed(all, @"testStandard") == 1,
+       joinedSelectorNames(all));
+
+    // And the copy that survives is the subclass's. This is what the
+    // first-writer-wins rule buys, and it is observable: each descriptor's
+    // invocation is targeted at the class that declared it, so the shadowed
+    // entry would be aimed at the superclass had the superclass been allowed to
+    // overwrite it. Letting the superclass win would leave an inherited test
+    // pointing at the class that no longer defines it.
+    XCTTestInvocationDescriptor *shadowed = descriptorNamed(all, @"testStandard");
+    ok("the subclass's copy of a shadowed method is the one kept",
+       shadowed.invocation.target == (id)[XCTSuiteConstructionDiscoverySubclass class],
+       [NSString stringWithFormat:@"target was %@",
+        shadowed.invocation.target == nil ? @"nil" : NSStringFromClass([shadowed.invocation.target class])]);
+
+    // An inherited method the subclass did not redefine keeps the superclass's
+    // descriptor, so it is aimed at the class that actually declares it.
+    XCTTestInvocationDescriptor *inherited =
+        descriptorNamed(all, @"testReportsThroughAnError:");
+    ok("an inherited method stays aimed at its declaring class",
+       inherited.invocation.target == (id)[XCTSuiteConstructionDiscoveryFixture class],
+       [NSString stringWithFormat:@"target was %@",
+        inherited.invocation.target == nil ? @"nil" : NSStringFromClass([inherited.invocation.target class])]);
+
+    // The whole hierarchy's tests, and nothing else. Three of the two classes'
+    // five "test"-prefixed methods survive: testTakesTwoArguments:and: is not a
+    // shape any convention recognizes, and testReturnsWithoutAHandler is not
+    // either, both already pinned by the per-class checks. The helper that only
+    // looks like a test never enters the count.
+    ok("the hierarchy contributes each test once", all.count == 3, ({
+        [NSString stringWithFormat:@"%lu descriptors: %@",
+         (unsigned long)all.count, joinedSelectorNames(all)];
+    }));
+    ok("a helper that only looks like a test stays out",
+       descriptorNamed(all, @"helperThatOnlyLooksLikeATest") == nil, nil);
+
+    // The framework's own methods are not the user's tests. XCTestCase sits
+    // below the walk, so its "test"-prefixed methods are never reached -- which
+    // is the whole reason the walk stops where it does.
+    NSArray *fromFixture = [XCTSuiteConstructionDiscoveryFixture _allTestMethodInvocationDescriptors];
+    ok("the walk does not reach XCTestCase's own methods",
+       countNamed(fromFixture, @"testInvocations") == 0 &&
+           countNamed(fromFixture, @"testRun") == 0 &&
+           fromFixture.count == 2,
+       joinedSelectorNames(fromFixture));
+
+    // Ordered by name, so a run is reproducible across processes. Checked against
+    // an expected order rather than merely "sorted", because the question is
+    // which order, not that some order arrived.
+    ok("descriptors are ordered by selector name",
+       [joinedSelectorNames(all) isEqualToString:@"testOnlyOnTheSubclass, "
+        "testReportsThroughAnError:, testStandard"],
+       joinedSelectorNames(all));
+
+    // Case does not count. "testZebra" and "testapple" are in the opposite order
+    // under a case-sensitive comparison, so this fails if the sort quietly
+    // becomes one of those.
+    NSArray *cased = [XCTSuiteConstructionCaseFixture _allTestMethodInvocationDescriptors];
+    ok("the ordering ignores case",
+       [joinedSelectorNames(cased) isEqualToString:@"testapple, testZebra"],
+       joinedSelectorNames(cased));
+
+    // An empty hierarchy is still an answer, not a nil.
+    NSArray *empty = [XCTSuiteConstructionNoTestsFixture _allTestMethodInvocationDescriptors];
+    ok("a hierarchy with no tests reports none", empty != nil && empty.count == 0,
+       empty ? @"array was nil" : @"got a nil array");
+
+    // A fresh dictionary per call, so one class's tests cannot appear in the
+    // next class's answer. Probed with a class that has tests, since two empty
+    // results are necessarily the same object (an empty array copies to the one
+    // immutable empty array Foundation hands everyone) and identity would then
+    // say nothing about whether anything was built separately.
+    NSArray *first = [XCTSuiteConstructionDiscoveryFixture _allTestMethodInvocationDescriptors];
+    NSArray *second = [XCTSuiteConstructionDiscoveryFixture _allTestMethodInvocationDescriptors];
+    ok("each call collects its own list", first != second && first.count == second.count,
+       @"two calls returned the same object");
+
+    // As with discovery, the result is immutable -- `sortedArrayUsingComparator:`
+    // already returns one, so this is a statement about the contract rather than
+    // a change.
+    BOOL refusedMutation = NO;
+    @try {
+        [(NSMutableArray *)all addObject:[[XCTTestInvocationDescriptor alloc]
+            initWithSelectorString:@"testAppended"
+                         convention:XCTTestMethodConventionStandard
+                          invocation:nil
+                customErrorMessage:nil]];
+    } @catch (NSException *exception) {
+        refusedMutation = YES;
+    }
+    ok("the collected list cannot be edited by the caller", refusedMutation,
        @"an immutable array accepted an addition");
 }
 
@@ -2326,6 +2470,7 @@ int main(void)
     testInvocationDescriptors();
     testDescriptorRejection();
     testMethodInvocationDescriptors();
+    testAllMethodInvocationDescriptors();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();
