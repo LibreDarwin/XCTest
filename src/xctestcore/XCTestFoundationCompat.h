@@ -115,6 +115,29 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setReturnValue:(void *)returnValueLocation;
 - (void)getReturnValue:(void *)returnValueLocation;
 - (BOOL)argumentsRetained;
+// -retainArguments is deliberately NOT declared, although this runtime does
+// implement it and a probe finds it at a plausible address. It is unusable.
+//
+// Upstream semantics: copy the argument values out of the frame so objects passed
+// in are kept alive by the invocation. Measured here: -retainArguments does flip
+// -argumentsRetained from false to true, and an object written with
+// -setArgument:atIndex: still reads back as the same pointer afterwards. But the
+// call leaves the invocation holding an internal array that is not an array, and
+// the next release of the invocation -- either explicitly or at the end of its
+// scope -- aborts inside objc_release with "objc[pid]: Attempt to use unknown
+// class", on any argument shape tried, with or without a preceding -invoke. An
+// invocation created the same way and never retained deallocs cleanly, which
+// isolates the call rather than the surrounding code.
+//
+// Declaring it would be a trap: the declaration compiles, the flag says it
+// worked, and the crash surfaces later at a release site with no obvious link
+// back to here. Any port that needs retention has to keep the arguments alive by
+// hand -- hold the objects alongside the invocation -- rather than through this.
+//
+// Reference note: the recovered multi-device descriptor factory in
+// libXCTestSwiftSupport calls -retainArguments on the invocation it builds, so
+// that factory cannot be ported as written until this is either fixed upstream in
+// the SDK or worked around by holding the test invocation explicitly.
 /// Calls the target's implementation. The invocation must have been given a
 /// target and selector first.
 - (void)invoke;

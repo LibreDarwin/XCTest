@@ -432,23 +432,34 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 /// would report a decision that was never made.
 @property (nonatomic, readonly, strong, nullable) NSNumber *convention;
 
-/// Already targeted at the test case, so the invoker does not have to guess.
-@property (nonatomic, readonly, strong) NSInvocation *invocation;
+/// Already targeted at the test case, so the invoker does not have to guess, or
+/// nil when there is nothing to run.
+///
+/// Nullable because a descriptor also records a test that was rejected before it
+/// could be run, and a rejected test has no invocation to offer. Decoding the
+/// reference factory settles which it is: of the two ways it builds a descriptor,
+/// one supplies an invocation and leaves the error message nil, the other
+/// supplies an error message and leaves the invocation nil. Neither supplies
+/// both, so declaring this nonnull would be a claim the reference does not make.
+@property (nonatomic, readonly, strong, nullable) NSInvocation *invocation;
 
-/// What to say if this test turns out not to be runnable.
-@property (nonatomic, readonly, copy) NSString *customErrorMessage;
+/// What to say if this test turns out not to be runnable, or nil when it did.
+///
+/// The counterpart to -invocation, and nullable for the same reason: a test that
+/// runs has nothing to complain about.
+@property (nonatomic, readonly, copy, nullable) NSString *customErrorMessage;
 
 - (instancetype)initWithSelectorString:(NSString *)selectorString
                         conventionNumber:(nullable NSNumber *)conventionNumber
-                             invocation:(NSInvocation *)invocation
-                     customErrorMessage:(NSString *)customErrorMessage;
+                             invocation:(nullable NSInvocation *)invocation
+                     customErrorMessage:(nullable NSString *)customErrorMessage;
 - (instancetype)initWithSelectorString:(NSString *)selectorString
-                            invocation:(NSInvocation *)invocation
-                     customErrorMessage:(NSString *)customErrorMessage;
+                            invocation:(nullable NSInvocation *)invocation
+                     customErrorMessage:(nullable NSString *)customErrorMessage;
 - (instancetype)initWithSelectorString:(NSString *)selectorString
                             convention:(XCTTestMethodConvention)convention
-                            invocation:(NSInvocation *)invocation
-                     customErrorMessage:(NSString *)customErrorMessage;
+                            invocation:(nullable NSInvocation *)invocation
+                     customErrorMessage:(nullable NSString *)customErrorMessage;
 @end
 
 /// How a test names itself, and the identifier that names it to the selection

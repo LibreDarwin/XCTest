@@ -969,6 +969,51 @@ static void testInvocationDescriptors(void)
        unstated.description);
 }
 
+#pragma mark - Descriptor rejects a test
+
+static void testDescriptorRejection(void)
+{
+    printf("descriptor without an invocation\n");
+
+    // A descriptor is also how discovery reports a test it refused, and there is
+    // nothing to hand back but the reason. The reference factory builds exactly
+    // two shapes -- an invocation with no message, or a message with no
+    // invocation -- so both nullable properties have to survive nil rather than
+    // only ever being handed a real object. Every other test in this file builds
+    // a descriptor with both, which is what let the pair be declared nonnull and
+    // still compile.
+    XCTTestInvocationDescriptor *rejected =
+        [[XCTTestInvocationDescriptor alloc] initWithSelectorString:@"testRejected"
+                                                         convention:XCTTestMethodConventionError
+                                                         invocation:nil
+                                                  customErrorMessage:@"not a valid test method"];
+    ok("a rejected test keeps the message it was given",
+       [rejected.customErrorMessage isEqualToString:@"not a valid test method"], nil);
+    ok("a rejected test has no invocation to run",
+       rejected.invocation == nil, nil);
+    ok("a rejected test still names the method",
+       [rejected.selectorString isEqualToString:@"testRejected"], nil);
+    ok("a rejected test keeps the convention it was given",
+       [rejected.convention isEqualToNumber:@(XCTTestMethodConventionError)], nil);
+
+    // nil must survive the copy rather than become an empty string. An empty
+    // message would be indistinguishable from a deliberate empty one, and would
+    // print as a blank reason where the truth is that there was none.
+    ok("a nil message stays nil rather than becoming empty",
+       rejected.customErrorMessage == nil ||
+           ![rejected.customErrorMessage isEqualToString:@""], rejected.customErrorMessage);
+
+    XCTTestInvocationDescriptor *runnable =
+        [[XCTTestInvocationDescriptor alloc] initWithSelectorString:@"testRunnable"
+                                                         convention:XCTTestMethodConventionError
+                                                         invocation:[[[XCTSuiteConstructionPlainFixture class] testInvocations] firstObject]
+                                                  customErrorMessage:nil];
+    ok("a runnable test has no message",
+       runnable.customErrorMessage == nil, runnable.customErrorMessage);
+    ok("a runnable test keeps its invocation",
+       runnable.invocation != nil, nil);
+}
+
 #pragma mark - Class from string
 
 static void testClassFromString(void)
@@ -2045,6 +2090,7 @@ int main(void)
     testAsyncSetUpAndTearDownOverrides();
     testAsyncBlockSignatures();
     testInvocationDescriptors();
+    testDescriptorRejection();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();
