@@ -691,13 +691,23 @@ static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
     // saying so is what tells a handler that can only report success from one
     // that might report a failure. Reading it would mean naming the class of
     // the block's first argument, which needs Foundation's private
-    // -_classForObjectAtArgumentIndex:; measured against a signature built
-    // from a type encoding that resolves nothing -- nil for every index,
-    // including the block itself -- because an encoding says only "@" for any
-    // object and carries no class to resolve. Passing Nil here therefore
-    // rejects a handler that takes an NSError rather than mistaking it for one
-    // that cannot report a failure, which is the safe direction: nothing then
-    // invokes a test whose convention was never established.
+    // -_classForObjectAtArgumentIndex:.
+    //
+    // Measured, and it is unreachable here. That method answers nil for every
+    // index of a signature built from a type encoding, including index 0, the
+    // block itself, because an encoding says only "@" for any object and so
+    // holds no class to resolve. The reference does not read the shape from
+    // such a signature: it asks the method for the signature of its block
+    // argument with -_signatureForBlockAtArgumentIndex:2 first. That method is
+    // present and answers nil too, at every index, for both instance and
+    // class method signatures, so there is no block-derived signature to ask
+    // about. Naming a handler's NSError is therefore not something this
+    // Foundation will do for us, whichever route is taken.
+    //
+    // Passing Nil rejects a handler that takes an NSError rather than
+    // mistaking it for one that cannot report a failure, which is the safe
+    // direction: nothing then invokes a test whose convention was never
+    // established.
     return [self isValidTestMethodUsingAsyncConventionWithArgumentCount:argumentCount
                                                             returnType:returnType
                                                   blockArgumentCount:firstBlockArgumentSignature.numberOfArguments
