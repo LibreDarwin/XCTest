@@ -166,10 +166,45 @@ static void checkPaths(void)
           "-stringByAppendingPathComponent: joins with a separator", "wrong result");
 }
 
+static void checkBlockSignature(void)
+{
+    printf("NSMethodSignature block argument lookup\n");
+
+    // XCTestCore decides whether a method is written in the async convention by
+    // asking its signature what the handler at index 2 takes, because a method's
+    // own encoding writes every block as "@?". Two properties of the answer
+    // matter to that decision, and both are checked here.
+    Fixture *fixture = [[Fixture alloc] init];
+
+    // nil, not a signature: which is what makes an async test undiscoverable on
+    // this platform and the reason no test here asserts that such a test is
+    // found.
+    NSMethodSignature *signature = [fixture methodSignatureForSelector:@selector(add:to:)];
+    check([signature _signatureForBlockAtArgumentIndex:2] == nil,
+          "-_signatureForBlockAtArgumentIndex: reports nothing here",
+          "a block signature was produced, so the async convention may now differ");
+
+    // nil rather than a raise, including past the end of the signature. XCTestCore
+    // guards the index anyway, because an answer about an index the method does
+    // not have says nothing about the method -- but it must not cost a test run
+    // an exception, or a helper method that happens to be named test* would take
+    // the whole discovery pass down with it.
+    NSMethodSignature *twoArguments = [fixture methodSignatureForSelector:@selector(takeNoArguments)];
+    BOOL raised = NO;
+    @try {
+        (void)[twoArguments _signatureForBlockAtArgumentIndex:2];
+    } @catch (NSException *exception) {
+        raised = YES;
+    }
+    check(!raised, "asking past the end of a signature does not raise",
+          "the lookup raised, so discovery of an odd test method would raise too");
+}
+
 int main(void)
 {
     @autoreleasepool {
         checkInvocation();
+        checkBlockSignature();
         checkCollections();
         checkPaths();
     }

@@ -142,6 +142,76 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 }
 @end
 
+// Carries one method per shape discovery has to answer differently: the two
+// conventions it can recognize here, and three that only look like tests. The
+// helper is filtered by name, the two-argument method by having more arguments
+// than any convention allows, and testReturnsWithoutAHandler by answering
+// neither convention -- it returns a value with nothing to report through, which
+// is the shape a test-prefixed convenience method usually has.
+//
+// Deliberately no async method. Telling a completion-handler test from a
+// convenience method needs the handler's real signature, which
+// -_signatureForBlockAtArgumentIndex: cannot supply on this platform, so such a
+// method would be rejected here for a reason that has nothing to do with it.
+// Asserting that would pin a known gap as though it were the contract; the gap
+// is recorded in XCTestFoundationCompat.h where the stub is declared.
+@interface XCTSuiteConstructionDiscoveryFixture : XCTestCase
+- (void)testStandard;
+- (BOOL)testReportsThroughAnError:(NSError **)error;
+- (id)testReturnsWithoutAHandler;
+- (void)testTakesTwoArguments:(NSInteger)first and:(NSInteger)second;
+- (void)helperThatOnlyLooksLikeATest;
+@end
+@implementation XCTSuiteConstructionDiscoveryFixture
+- (void)testStandard
+{
+}
+- (BOOL)testReportsThroughAnError:(NSError **)error
+{
+    *error = nil;
+    return YES;
+}
+- (id)testReturnsWithoutAHandler
+{
+    return self;
+}
+- (void)testTakesTwoArguments:(NSInteger)first and:(NSInteger)second
+{
+    (void)first;
+    (void)second;
+}
+- (void)helperThatOnlyLooksLikeATest
+{
+}
+@end
+
+// Subclasses the fixture above, to tell "what this class declared" apart from
+// "what may run here": discovery must report neither the inherited methods nor
+// any shadowing, because the walk that resolves both belongs to +testInvocations.
+@interface XCTSuiteConstructionDiscoverySubclass : XCTSuiteConstructionDiscoveryFixture
+- (void)testStandard;
+- (void)testOnlyOnTheSubclass;
+@end
+@implementation XCTSuiteConstructionDiscoverySubclass
+- (void)testStandard
+{
+}
+- (void)testOnlyOnTheSubclass
+{
+}
+@end
+
+// Declares no test at all, to pin that an empty result is an answer rather than
+// a missing one.
+@interface XCTSuiteConstructionNoTestsFixture : XCTestCase
+- (void)helper;
+@end
+@implementation XCTSuiteConstructionNoTestsFixture
+- (void)helper
+{
+}
+@end
+
 // Supplies its own +defaultTestSuite, the path that lets a class decide what its
 // suite contains without the invocations being scanned.
 @interface XCTSuiteConstructionDefaultSuiteFixture : XCTestCase
@@ -1012,6 +1082,170 @@ static void testDescriptorRejection(void)
        runnable.customErrorMessage == nil, runnable.customErrorMessage);
     ok("a runnable test keeps its invocation",
        runnable.invocation != nil, nil);
+}
+
+#pragma mark - Method invocation descriptors
+
+/// The descriptor a method name discovered, or nil if discovery left it out.
+static XCTTestInvocationDescriptor *descriptorNamed(NSArray *descriptors, NSString *name)
+{
+    for (XCTTestInvocationDescriptor *descriptor in descriptors) {
+        if ([descriptor.selectorString isEqualToString:name]) {
+            return descriptor;
+        }
+    }
+    return nil;
+}
+
+static NSUInteger countNamed(NSArray *descriptors, NSString *prefix)
+{
+    NSUInteger count = 0;
+    for (XCTTestInvocationDescriptor *descriptor in descriptors) {
+        if ([descriptor.selectorString hasPrefix:prefix]) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static void testMethodInvocationDescriptors(void)
+{
+    printf("method invocation descriptors\n");
+
+    NSArray *descriptors =
+        [XCTSuiteConstructionDiscoveryFixture _testMethodInvocationDescriptors];
+
+    // Two conventions in, two tests out. The count is checked before the
+    // contents so a method that is missing and a method that appears twice
+    // cannot both hide behind a passing membership test.
+    ok("a method per recognized convention",
+       descriptors.count == 2, ({
+           NSMutableString *why = [NSMutableString string];
+           for (XCTTestInvocationDescriptor *descriptor in descriptors) {
+               [why appendFormat:@"%@ ", descriptor.selectorString];
+           }
+           [why appendFormat:@"-- %lu descriptors", (unsigned long)descriptors.count];
+           why;
+       }));
+
+    // Names come from the selector as written, so a method with arguments keeps
+    // them. A name that had been trimmed to fit something else would describe a
+    // method the class does not have, which -[NSObject doesNotRecognizeSelector:]
+    // would then turn into a failure at run time.
+    ok("a discovered method keeps its full selector",
+       descriptorNamed(descriptors, @"testReportsThroughAnError:") != nil, nil);
+    ok("a zero-argument method is named without arguments",
+       descriptorNamed(descriptors, @"testStandard") != nil, nil);
+
+    // Each convention is reported as itself, which is the whole reason a
+    // descriptor exists: the list says how to run each test, not only that it
+    // exists.
+    ok("the standard convention is reported as standard",
+       [descriptorNamed(descriptors, @"testStandard").convention
+           isEqualToNumber:@(XCTTestMethodConventionStandard)], nil);
+    ok("the error convention is reported as error",
+       [descriptorNamed(descriptors, @"testReportsThroughAnError:").convention
+           isEqualToNumber:@(XCTTestMethodConventionError)], nil);
+
+    // Each descriptor's invocation is ready to run: selector assigned, target
+    // aimed at the class that declared the method. An invocation missing either
+    // dispatches through nothing.
+    XCTTestInvocationDescriptor *standard = descriptorNamed(descriptors, @"testStandard");
+    ok("a discovered test is already aimed at its class",
+       standard.invocation.target == (id)[XCTSuiteConstructionDiscoveryFixture class] &&
+           standard.invocation.selector == @selector(testStandard),
+       nil);
+    ok("a runnable descriptor carries no failure message",
+       standard.customErrorMessage == nil, standard.customErrorMessage);
+
+    // The three methods that only look like tests. A name filter and the
+    // classifier are separate decisions, so each is pinned separately: dropping
+    // the helper proves the name was read, and dropping the other two proves the
+    // shape was.
+    ok("a helper whose name only starts like a test is left out",
+       descriptorNamed(descriptors, @"helperThatOnlyLooksLikeATest") == nil, nil);
+    ok("a test-prefixed method with too many arguments is left out",
+       descriptorNamed(descriptors, @"testTakesTwoArguments:and:") == nil, nil);
+    // This one is the shape discovery newly had to survive. It is two arguments
+    // long -- self and _cmd -- and returns a value, so the async convention has
+    // to be considered, and there is no third argument to ask about.
+    ok("a test-prefixed method with no argument to report through is left out",
+       descriptorNamed(descriptors, @"testReturnsWithoutAHandler") == nil, nil);
+
+    // A descriptor is runnable or it explains itself, never both. Discovery
+    // produces the first kind, and the pair of nullable properties only make
+    // sense while that stays true.
+    BOOL consistent = YES;
+    for (XCTTestInvocationDescriptor *descriptor in descriptors) {
+        if ((descriptor.invocation != nil) == (descriptor.customErrorMessage != nil)) {
+            consistent = NO;
+        }
+    }
+    ok("no discovered test is both runnable and rejected", consistent, nil);
+
+    // The answer is about the receiver alone. Neither inherited methods nor
+    // shadowing appear here, because answering either would mean walking the
+    // hierarchy, and that walk is +testInvocations' question -- a different one.
+    NSArray *fromSuperclass =
+        [XCTSuiteConstructionDiscoveryFixture _testMethodInvocationDescriptors];
+    ok("discovery does not reach up the hierarchy",
+       countNamed(fromSuperclass, @"testOnlyOnTheSubclass") == 0, nil);
+    NSArray *fromSubclass =
+        [XCTSuiteConstructionDiscoverySubclass _testMethodInvocationDescriptors];
+    ok("discovery does not report inherited methods",
+       descriptorNamed(fromSubclass, @"testReportsThroughAError:") == nil &&
+           descriptorNamed(fromSubclass, @"helperThatOnlyLooksLikeATest") == nil,
+       nil);
+    ok("discovery reports what the subclass itself declared",
+       fromSubclass.count == 2, ({
+           NSMutableString *why = [NSMutableString string];
+           for (XCTTestInvocationDescriptor *descriptor in fromSubclass) {
+               [why appendFormat:@"%@ ", descriptor.selectorString];
+           }
+           [why appendFormat:@"-- %lu descriptors", (unsigned long)fromSubclass.count];
+           why;
+       }));
+    // The subclass declares testStandard too. Reporting it as a separate test
+    // would be right for a per-class scan and wrong for a run -- which is
+    // precisely the split between this method and +testInvocations.
+    ok("a shadowing override is still reported by the subclass",
+       descriptorNamed(fromSubclass, @"testStandard") != nil, nil);
+
+    // A class with no tests has an empty answer, not a missing one. A nil return
+    // would be indistinguishable from a class the caller failed to ask about.
+    NSArray *empty = [XCTSuiteConstructionNoTestsFixture _testMethodInvocationDescriptors];
+    ok("a class with no tests reports none", empty != nil && empty.count == 0,
+       empty ? @"array was nil" : @"got a nil array");
+
+    // Copied before returning, so a caller that edits the array cannot change
+    // what the next caller is told. A mutable result would make discovery's
+    // answer depend on who asked first.
+    //
+    // Probed on a result with something in it. An empty array copies to the one
+    // immutable empty array Foundation hands everyone, so two empty answers are
+    // necessarily the same object and identity would say nothing about whether a
+    // copy happened. Nor are the two answers compared for equality: the
+    // descriptors in them are fresh objects that do not implement -isEqual:, so
+    // equality would report NO for two genuinely identical lists.
+    NSArray *first = [XCTSuiteConstructionDiscoveryFixture _testMethodInvocationDescriptors];
+    NSArray *second = [XCTSuiteConstructionDiscoveryFixture _testMethodInvocationDescriptors];
+    ok("the answer is copied rather than handed over",
+       first != second, @"two calls returned the same object");
+
+    // The return value's type carries that promise, so it is checked by using it
+    // the way a mutable array invites: by adding to it.
+    BOOL refusedMutation = NO;
+    @try {
+        [(NSMutableArray *)descriptors addObject:[[XCTTestInvocationDescriptor alloc]
+            initWithSelectorString:@"testAppended"
+                         convention:XCTTestMethodConventionStandard
+                          invocation:nil
+                customErrorMessage:nil]];
+    } @catch (NSException *exception) {
+        refusedMutation = YES;
+    }
+    ok("the answer cannot be edited by the caller", refusedMutation,
+       @"an immutable array accepted an addition");
 }
 
 #pragma mark - Class from string
@@ -2091,6 +2325,7 @@ int main(void)
     testAsyncBlockSignatures();
     testInvocationDescriptors();
     testDescriptorRejection();
+    testMethodInvocationDescriptors();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();

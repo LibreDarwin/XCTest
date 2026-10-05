@@ -224,10 +224,14 @@ NS_ASSUME_NONNULL_BEGIN
 // async convention.
 //
 // Measured on this platform: nil at every index tried, for a signature taken from
-// a real method as well as one built from a type encoding. So a caller that asks
-// for an async convention this way is told nothing, and answers NO. Declared in a
-// category rather than in the shim above because the call has to compile under
-// both SDKs, and the reduced one hides its Foundation headers inside the guard.
+// a real method as well as one built from a type encoding, including an index
+// past the end of the signature. That last one is why the caller guards rather
+// than relying on it: nil for an index the method does not have is this
+// platform's answer, not a promise about the method, and a caller cannot tell
+// those apart. So a caller that asks for an async convention this way is told
+// nothing, and answers NO. Declared in a category rather than in the shim above
+// because the call has to compile under both SDKs, and the reduced one hides its
+// Foundation headers inside the guard.
 @interface NSMethodSignature (XCTSDKCompatPrivateBlockSignature)
 - (nullable instancetype)_signatureForBlockAtArgumentIndex:(NSUInteger)index;
 @end

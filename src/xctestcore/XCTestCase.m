@@ -656,7 +656,16 @@ static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
     // convention, which a method's own encoding cannot show: every block is
     // written "@?". Asking the signature for the block's real shape is the only
     // way to tell.
-    NSMethodSignature *firstBlockArgumentSignature = [signature _signatureForBlockAtArgumentIndex:2];
+    //
+    // Asked only where there is an argument to ask about. Index 2 is the first
+    // declared argument, and a method that has reached this point with two
+    // arguments in its signature has none, so the reference does not ask and
+    // treats the shape as unknown instead. Asking anyway gets nil here --
+    // measured, at every index including one past the end -- but that is this
+    // platform's answer to an index it does not have rather than a promise
+    // about the method, and a caller cannot tell those apart.
+    NSMethodSignature *firstBlockArgumentSignature =
+        argumentCount == 3 ? [signature _signatureForBlockAtArgumentIndex:2] : nil;
     BOOL isThrowing = NO;
     if (![self isValidTestMethodUsingAsyncConventionWithArgumentCount:argumentCount
                                                            returnType:returnTypeCharacter
@@ -886,6 +895,90 @@ static struct {
 }
 
 #pragma mark - Runtime utilities
+
++ (NSArray *)_testMethodInvocationDescriptors
+{
+    unsigned int count = 0;
+    Method *methods = class_copyMethodList(self, &count);
+    if (methods == NULL) {
+        return @[];
+    }
+
+    NSMutableArray<XCTTestInvocationDescriptor *> *descriptors =
+        [NSMutableArray arrayWithCapacity:count];
+
+    for (unsigned int i = 0; i < count; i++) {
+        Method method = methods[i];
+        if (method == NULL) {
+            continue;
+        }
+        SEL selector = method_getName(method);
+        // The name is asked for as a string rather than read off the selector as
+        // a C string, so the descriptor holds something that stays valid for as
+        // long as the descriptor does.
+        NSString *name = NSStringFromSelector(selector);
+        if (![name hasPrefix:@"test"]) {
+            continue;
+        }
+        // An absent or empty encoding cannot yield a signature, and asking for
+        // one anyway produces nil -- which downstream would be indistinguishable
+        // from a method the classifier rejected.
+        const char *typeEncoding = method_getTypeEncoding(method);
+        if (typeEncoding == NULL || typeEncoding[0] == '\0') {
+            continue;
+        }
+
+        NSMethodSignature *signature = [self instanceMethodSignatureForSelector:selector];
+        if (signature == nil) {
+            continue;
+        }
+
+        XCTTestInvocationDescriptor *descriptor = nil;
+        @try {
+            // Asked as a convention rather than filtered inline, so the shape is
+            // named the way the reference names it and a method written in a
+            // convention not yet runnable still arrives carrying its convention
+            // instead of being reported as though it were not a test at all.
+            XCTTestMethodConvention convention = XCTTestMethodConventionStandard;
+            if ([XCTestCase isValidTestMethodWithSignature:signature convention:&convention]) {
+                NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+                invocation.selector = selector;
+                // The target is set here. The reference leaves it to
+                // +testCaseWithInvocation:testRunConfiguration:, which is not
+                // ported, and an invocation aimed at nothing is a description of
+                // a test rather than a way to run one -- so the contract
+                // XCTTestInvocationDescriptor documents is kept here instead.
+                invocation.target = self;
+                descriptor = [[XCTTestInvocationDescriptor alloc] initWithSelectorString:name
+                                                                              convention:convention
+                                                                               invocation:invocation
+                                                                     customErrorMessage:nil];
+            }
+        } @catch (NSException *exception) {
+            // The reference reads the reason through
+            // __XCTGetCurrentExceptionReasonWithFallback, which is private to
+            // XCTest's assertion plumbing. Inside a @catch that is the caught
+            // exception's own reason, so it is read from there.
+            descriptor = [[XCTTestInvocationDescriptor alloc] initWithSelectorString:name
+                                                                          convention:XCTTestMethodConventionStandard
+                                                                           invocation:nil
+                                                                 customErrorMessage:exception.reason];
+        }
+
+        // A method the classifier rejected leaves nothing to add, which is the
+        // reference's behaviour too: it skips the descriptor rather than
+        // recording a rejection that nobody asked about.
+        if (descriptor != nil) {
+            [descriptors addObject:descriptor];
+        }
+    }
+
+    free(methods);
+    // Copied, not handed over. The reference returns an immutable array, and a
+    // mutable one would let the first caller edit one class's discovered tests
+    // out from under the next.
+    return [descriptors copy];
+}
 
 /// Sorts a set of classes by class name, with the Swift module stripped, so a
 /// run is reproducible across processes -- where the runtime's class-list order

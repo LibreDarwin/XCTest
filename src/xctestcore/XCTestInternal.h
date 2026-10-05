@@ -281,6 +281,33 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// asked for the invocations a selection is filtering, one test at a time.
 + (BOOL)overridesTestInvocations;
 
+/// Every test method the receiver itself declares, one descriptor each.
+///
+/// The reference's discovery pass, and the reason the descriptor type exists:
+/// a descriptor says which convention a method is written in and carries the
+/// invocation already built for it, so the same list can be both the set of
+/// tests and the instruction for running each one.
+///
+/// This asks a narrower question than +testInvocations and deliberately gives a
+/// different answer. It reads the receiver's own method list -- it does not walk
+/// up the hierarchy, does not let a subclass shadow a superclass method, and
+/// does not sort. "What did this class declare" and "which tests may run here"
+/// are different questions, and the reference keeps both. Nothing consumes this
+/// yet: the suite construction that would is not ported.
+///
+/// A method that raises while being turned into an invocation still produces a
+/// descriptor, one carrying the reason and no invocation. The reason is that a
+/// dropped method is indistinguishable from one that was never written, so an
+/// exception during discovery would silently become a missing test.
+///
+/// The reference's version first consults a multi-device hook and returns an
+/// empty array when the receiver opts into it. That hook is keyed on
+/// shouldProvideTestInvocationDescriptors, which this tree declares no
+/// equivalent of, so the branch is omitted rather than stubbed -- nothing here
+/// can ask for the hook, and a stub that always declined would be a lie with a
+/// call site.
++ (NSArray *)_testMethodInvocationDescriptors;
+
 @end
 
 /// Whether this OS can run this test class at all.
