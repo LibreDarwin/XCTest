@@ -616,6 +616,63 @@ static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
     return argumentCount == 2 && returnType == 'v';
 }
 
++ (BOOL)isValidTestMethodWithSignature:(NSMethodSignature *)signature
+                             convention:(XCTTestMethodConvention *)convention
+{
+    NSUInteger argumentCount = signature.numberOfArguments;
+    // A test method takes no more than self, _cmd and one further argument.
+    // Anything else is not one of the conventions' shapes, and deciding that
+    // here means the argument is never read off a signature that has none.
+    if (argumentCount > 3) {
+        return NO;
+    }
+    const char *returnType = signature.methodReturnType;
+    char returnTypeCharacter = returnType != NULL ? returnType[0] : '\0';
+
+    // Standard and error first: both are settled by the method's own encoding
+    // alone, and neither has to ask what a block argument takes.
+    if ([self isValidTestMethodUsingStandardConventionWithArgumentCount:argumentCount
+                                                            returnType:returnTypeCharacter]) {
+        if (convention != NULL) {
+            *convention = XCTTestMethodConventionStandard;
+        }
+        return YES;
+    }
+
+    // Index 2 is the first declared argument, past self and _cmd. Read only when
+    // there is one, so the call cannot be made against a signature that has not
+    // reached that argument.
+    const char *firstArgumentType = argumentCount == 3 ? [signature getArgumentTypeAtIndex:2] : NULL;
+    if ([self isValidTestMethodUsingErrorConventionWithArgumentCount:argumentCount
+                                                          returnType:returnTypeCharacter
+                                                     firstArgumentType:firstArgumentType != NULL ? firstArgumentType : ""]) {
+        if (convention != NULL) {
+            *convention = XCTTestMethodConventionError;
+        }
+        return YES;
+    }
+
+    // Neither settled it, so the method may still be written in the async
+    // convention, which a method's own encoding cannot show: every block is
+    // written "@?". Asking the signature for the block's real shape is the only
+    // way to tell.
+    NSMethodSignature *firstBlockArgumentSignature = [signature _signatureForBlockAtArgumentIndex:2];
+    BOOL isThrowing = NO;
+    if (![self isValidTestMethodUsingAsyncConventionWithArgumentCount:argumentCount
+                                                           returnType:returnTypeCharacter
+                                         firstBlockArgumentSignature:firstBlockArgumentSignature
+                                                           isThrowing:&isThrowing]) {
+        return NO;
+    }
+    if (convention != NULL) {
+        // The async predicate has already decided the handler's shape, so the
+        // convention follows from its answer rather than being asked again.
+        *convention = isThrowing ? XCTTestMethodConventionAsyncThrowing
+                                 : XCTTestMethodConventionAsyncNonThrowing;
+    }
+    return YES;
+}
+
 + (BOOL)isValidTestMethodUsingErrorConventionWithArgumentCount:(NSUInteger)argumentCount
                                                      returnType:(char)returnType
                                              firstArgumentType:(const char *)firstArgumentType
@@ -714,6 +771,65 @@ static BOOL _XCTReturnTypeCarriesAValueForErrorConvention(char returnType)
                                                    blockReturnType:blockReturnType != NULL ? *blockReturnType : 0
                                          blockFirstArgumentClass:Nil
                                                         isThrowing:isThrowing];
+}
+
+/// The base implementations, captured once.
+///
+/// XCTest rather than XCTestCase supplies the async lifecycle methods, so that
+/// is where the unmodified methods are read from. Captured under dispatch_once
+/// because the comparison is by identity against them, and re-reading them per
+/// call would make this a per-call lookup for an answer that never changes.
+static struct {
+    dispatch_once_t onceToken;
+    IMP baseSetUpMethod;
+    IMP baseTearDownMethod;
+} _overridesAsyncSetUpOrTearDown;
+
+/// Whether self replaces either async lifecycle method with a handler-based one.
++ (BOOL)overridesAsyncSetUpOrTearDown
+{
+    dispatch_once(&_overridesAsyncSetUpOrTearDown.onceToken, ^{
+        Class baseClass = [XCTest class];
+        _overridesAsyncSetUpOrTearDown.baseSetUpMethod =
+            [baseClass instanceMethodForSelector:@selector(setUpWithCompletionHandler:)];
+        _overridesAsyncSetUpOrTearDown.baseTearDownMethod =
+            [baseClass instanceMethodForSelector:@selector(tearDownWithCompletionHandler:)];
+    });
+
+    // Whether an override is async is a property of the method's signature, so
+    // both selectors are asked the same question and share one answer.
+    BOOL (^overridesAsync)(SEL) = ^BOOL(SEL selector) {
+        NSMethodSignature *signature = [self instanceMethodSignatureForSelector:selector];
+        if (signature == nil) {
+            return NO;
+        }
+        NSUInteger convention = 0;
+        if (![XCTestCase isValidTestMethodWithSignature:signature convention:&convention]) {
+            return NO;
+        }
+        // Both async conventions count. Masking off the throwing bit leaves the
+        // two async values sharing a value that nothing else produces, so the
+        // test is "is this async at all" without enumerating them, and a
+        // standard or error method cannot be mistaken for one.
+        return (convention & ~1u) == 2;
+    };
+
+    // Comparing the implementation that would run, rather than asking whether
+    // the method exists, is what distinguishes "inherits the base" from
+    // "declares its own". A subclass that redeclares the method gets its own
+    // entry and so its own pointer, even with a body identical to the base's,
+    // and the question asked here is whether it wrote one -- not whether the
+    // code it wrote differs.
+    if ([self instanceMethodForSelector:@selector(setUpWithCompletionHandler:)] != _overridesAsyncSetUpOrTearDown.baseSetUpMethod &&
+        overridesAsync(@selector(setUpWithCompletionHandler:))) {
+        return YES;
+    }
+    // SetUp answers first and on its own; tearDown is only consulted once setUp
+    // has not settled it.
+    if ([self instanceMethodForSelector:@selector(tearDownWithCompletionHandler:)] == _overridesAsyncSetUpOrTearDown.baseTearDownMethod) {
+        return NO;
+    }
+    return overridesAsync(@selector(tearDownWithCompletionHandler:));
 }
 
 + (NSArray<NSInvocation *> *)testInvocations

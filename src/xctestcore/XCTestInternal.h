@@ -380,6 +380,16 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 @interface XCTestCase (XCTTestMethodConventions)
 + (BOOL)isValidTestMethodUsingStandardConventionWithArgumentCount:(NSUInteger)argumentCount
                                                        returnType:(char)returnType;
+/// Decides which convention a method is written in, and says so in convention.
+///
+/// This is the entry point for a method whose shape has to be read rather than
+/// supplied: it takes the signature and works out the answer, so a caller that
+/// holds only a signature does not have to reimplement the classification.
+///
+/// Leaves *convention alone when the method is not a test at all, so a stale
+/// value from a previous method is never mistaken for a verdict reached here.
++ (BOOL)isValidTestMethodWithSignature:(NSMethodSignature *)signature
+                             convention:(nullable XCTTestMethodConvention *)convention;
 + (BOOL)isValidTestMethodUsingErrorConventionWithArgumentCount:(NSUInteger)argumentCount
                                                      returnType:(char)returnType
                                              firstArgumentType:(const char *)firstArgumentType;
@@ -391,8 +401,15 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
                                                     isThrowing:(nullable BOOL *)isThrowing;
 + (BOOL)isValidTestMethodUsingAsyncConventionWithArgumentCount:(NSUInteger)argumentCount
                                                     returnType:(char)returnType
-                                      firstBlockArgumentSignature:(nullable NSMethodSignature *)firstBlockArgumentSignature
-                                                    isThrowing:(nullable BOOL *)isThrowing;
+                              firstBlockArgumentSignature:(nullable NSMethodSignature *)firstBlockArgumentSignature
+                                                     isThrowing:(nullable BOOL *)isThrowing;
+
+/// Whether self replaces either async lifecycle method with a handler-based one.
+///
+/// A class whose setUp or tearDown takes a completion handler has to be driven
+/// differently, so this is asked before the tests run rather than discovered per
+/// test method.
++ (BOOL)overridesAsyncSetUpOrTearDown;
 @end
 
 /// A discovered test method, as the pieces needed to run it.

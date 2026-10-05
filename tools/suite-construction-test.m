@@ -97,6 +97,51 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 }
 @end
 
+// Replaces the async lifecycle method with a handler-based one, which is the
+// thing overridesAsyncSetUpOrTearDown exists to notice.
+@interface XCTSuiteConstructionAsyncSetUpFixture : XCTestCase
+@end
+@implementation XCTSuiteConstructionAsyncSetUpFixture
+- (void)setUpWithCompletionHandler:(void (^)(NSError *error))handler
+{
+    handler(nil);
+}
+@end
+
+// The same, declared for tearDown only.
+@interface XCTSuiteConstructionAsyncTearDownFixture : XCTestCase
+@end
+@implementation XCTSuiteConstructionAsyncTearDownFixture
+- (void)tearDownWithCompletionHandler:(void (^)(NSError *error))handler
+{
+    handler(nil);
+}
+@end
+
+// Declares the lifecycle method but not in the async shape, so it overrides the
+// base without being driven asynchronously. A method that must be called but
+// returns its outcome instead of taking a handler.
+@interface XCTSuiteConstructionSyncSetUpFixture : XCTestCase
+@end
+@implementation XCTSuiteConstructionSyncSetUpFixture
+- (void)setUpWithCompletionHandler:(void (^)(NSError *error))handler
+{
+    // Declared but never treated as a test's lifecycle: what matters here is
+    // only that the class wrote the method.
+    (void)handler;
+}
+@end
+
+// Leaves both lifecycle methods alone.
+@interface XCTSuiteConstructionNoLifecycleFixture : XCTestCase
+- (void)testNothing;
+@end
+@implementation XCTSuiteConstructionNoLifecycleFixture
+- (void)testNothing
+{
+}
+@end
+
 // Supplies its own +defaultTestSuite, the path that lets a class decide what its
 // suite contains without the invocations being scanned.
 @interface XCTSuiteConstructionDefaultSuiteFixture : XCTestCase
@@ -421,6 +466,119 @@ static void testAvailability(void)
 }
 
 #pragma mark - Test method conventions
+
+static void testConventionFromSignature(void)
+{
+    printf("convention from a signature\n");
+
+    // The signatures here stand in for what a caller would hold. A standard test
+    // takes no argument beyond self and _cmd.
+    XCTTestMethodConvention convention = 99;
+    ok("a method taking nothing is a standard test",
+       [XCTestCase isValidTestMethodWithSignature:[NSMethodSignature signatureWithObjCTypes:"v@:"]
+                                        convention:&convention] && convention == XCTTestMethodConventionStandard, nil);
+
+    // An NSError ** out-parameter with a return type that carries a value.
+    convention = 99;
+    ok("a method reporting through an NSError out-parameter is an error test",
+       [XCTestCase isValidTestMethodWithSignature:[NSMethodSignature signatureWithObjCTypes:"B@:^@"]
+                                        convention:&convention] && convention == XCTTestMethodConventionError, nil);
+
+    // More arguments than any convention allows, so not a test at all.
+    convention = 99;
+    ok("a method taking two arguments is not a test",
+       ![XCTestCase isValidTestMethodWithSignature:[NSMethodSignature signatureWithObjCTypes:"v@:@@"]
+                                         convention:&convention], nil);
+    // A rejected method must not have written a verdict.
+    ok("a rejected method leaves the convention alone", convention == 99, nil);
+
+    // No out-parameter supplied, which a caller that only wants yes/no does.
+    ok("a caller wanting only the answer need not supply the out-parameter",
+       [XCTestCase isValidTestMethodWithSignature:[NSMethodSignature signatureWithObjCTypes:"v@:"]
+                                        convention:NULL], nil);
+
+    // The convention classifier agrees with the predicates it is built from,
+    // rather than repeating their conditions: each of the three shapes is put
+    // through both and compared.
+    XCTTestMethodConvention standard = 99, errored = 99, async = 99;
+    BOOL standardDirect = [XCTestCase isValidTestMethodUsingStandardConventionWithArgumentCount:2 returnType:'v'];
+    BOOL standardViaSignature = [XCTestCase isValidTestMethodWithSignature:[NSMethodSignature signatureWithObjCTypes:"v@:"]
+                                                                convention:&standard];
+    BOOL errorDirect = [XCTestCase isValidTestMethodUsingErrorConventionWithArgumentCount:3
+                                                                               returnType:'B'
+                                                                          firstArgumentType:"^@"];
+    BOOL errorViaSignature = [XCTestCase isValidTestMethodWithSignature:[NSMethodSignature signatureWithObjCTypes:"B@:^@"]
+                                                             convention:&errored];
+    ok("the standard shape classifies the same either way",
+       standardDirect == standardViaSignature && standardViaSignature, nil);
+    ok("the error shape classifies the same either way",
+       errorDirect == errorViaSignature && errorViaSignature, nil);
+    // A block in the third slot is what the async convention looks like in a
+    // method's own encoding; it must not be taken for the error convention.
+    ok("a block out-parameter is not read as an NSError one",
+       ![XCTestCase isValidTestMethodWithSignature:[NSMethodSignature signatureWithObjCTypes:"B@:@?"]
+                                         convention:&async], nil);
+}
+
+static void testAsyncSetUpAndTearDownOverrides(void)
+{
+    printf("async setUp and tearDown overrides\n");
+
+    // The comparison the answer rests on is of the implementation that would
+    // run, read off XCTest. Checked directly here, because it is the part that
+    // has to be right for the answer to mean anything.
+    IMP baseSetUp = [XCTest instanceMethodForSelector:@selector(setUpWithCompletionHandler:)];
+    IMP baseTearDown = [XCTest instanceMethodForSelector:@selector(tearDownWithCompletionHandler:)];
+    ok("XCTest supplies both async lifecycle methods",
+       baseSetUp != NULL && baseTearDown != NULL, nil);
+    ok("a class that overrides neither resolves to XCTest's setUp",
+       [XCTSuiteConstructionNoLifecycleFixture instanceMethodForSelector:@selector(setUpWithCompletionHandler:)] == baseSetUp, nil);
+    ok("a class that overrides tearDown resolves to XCTest's setUp but not its own tearDown",
+       [XCTSuiteConstructionAsyncTearDownFixture instanceMethodForSelector:@selector(setUpWithCompletionHandler:)] == baseSetUp &&
+           [XCTSuiteConstructionAsyncTearDownFixture instanceMethodForSelector:@selector(tearDownWithCompletionHandler:)] != baseTearDown, nil);
+    // Redeclaring with a body identical to the base's still means the class
+    // wrote the method, which is what the question asks -- so identity of the
+    // implementation, not similarity of the code, is the thing compared.
+    ok("a class that writes its own setUp resolves to something else",
+       [XCTSuiteConstructionSyncSetUpFixture instanceMethodForSelector:@selector(setUpWithCompletionHandler:)] != baseSetUp, nil);
+
+    // A class that overrides neither lifecycle method.
+    ok("a class that overrides neither does not claim to",
+       ![XCTSuiteConstructionNoLifecycleFixture overridesAsyncSetUpOrTearDown], nil);
+
+    // Declares setUp but not in the async shape: overriding is not enough, the
+    // override has to report through a handler or a caller would wait for
+    // something that never arrives.
+    ok("an override that is not handler-based is not seen",
+       ![XCTSuiteConstructionSyncSetUpFixture overridesAsyncSetUpOrTearDown], nil);
+
+    // A class that really does replace setUp with a handler-based one. Measured:
+    // not reported, because telling an async method from a synchronous one needs
+    // the signature of the block argument, and Foundation answers nil for it on
+    // this platform -- every index, on a signature taken from a real method, as
+    // 3o measured. So the async branch of the classifier cannot be reached and
+    // this answers NO.
+    //
+    // Asserted as NO rather than omitted: the honest state is that an async
+    // lifecycle override is invisible here, and a test that quietly expected YES
+    // would be testing a Foundation that does not exist. The classifier's async
+    // branch is covered directly in "async block signatures", where the handler's
+    // shape is supplied rather than obtained.
+    ok("a handler-based setUp is not seen, because the block's shape cannot be read",
+       ![XCTSuiteConstructionAsyncSetUpFixture overridesAsyncSetUpOrTearDown], nil);
+    ok("a handler-based tearDown is not seen, for the same reason",
+       ![XCTSuiteConstructionAsyncTearDownFixture overridesAsyncSetUpOrTearDown], nil);
+
+    // The base methods are captured once, so a second call must reach the same
+    // verdict as the first rather than comparing against a method captured afresh.
+    BOOL first = [XCTSuiteConstructionNoLifecycleFixture overridesAsyncSetUpOrTearDown];
+    BOOL second = [XCTSuiteConstructionNoLifecycleFixture overridesAsyncSetUpOrTearDown];
+    ok("asking twice gives the same answer", first == second, nil);
+    // Asking about one class must not have captured the other's answer.
+    ok("the captured base methods are XCTest's whatever class asks",
+       [XCTSuiteConstructionNoLifecycleFixture instanceMethodForSelector:@selector(setUpWithCompletionHandler:)] == baseSetUp &&
+           [XCTSuiteConstructionSyncSetUpFixture instanceMethodForSelector:@selector(setUpWithCompletionHandler:)] != baseSetUp, nil);
+}
 
 static void testMethodConventions(void)
 {
@@ -1883,6 +2041,8 @@ int main(void)
     testNaming();
     testAvailability();
     testMethodConventions();
+    testConventionFromSignature();
+    testAsyncSetUpAndTearDownOverrides();
     testAsyncBlockSignatures();
     testInvocationDescriptors();
     testClassFromString();

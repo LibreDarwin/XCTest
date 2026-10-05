@@ -96,6 +96,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) NSUInteger numberOfArguments;
 /// The type encoding of the return value, or null when there is none to read.
 @property (readonly, nullable) const char *methodReturnType;
+/// The type encoding of the argument at index, counting the way the runtime
+/// counts, so index 2 is the first declared argument of an instance method.
+- (nullable const char *)getArgumentTypeAtIndex:(NSUInteger)index;
 @end
 
 @interface NSInvocation : NSObject
@@ -187,6 +190,23 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly, copy) NSString *stringByDeletingLastPathComponent;
 @property (readonly, copy) NSString *stringByDeletingPathExtension;
 - (NSString *)stringByAppendingPathComponent:(NSString *)component;
+@end
+
+// The signature of the block passed as argument at index.
+//
+// Private Foundation API, with no public equivalent, and the only way to learn
+// what a block argument actually takes: a method's own type encoding writes every
+// block as "@?", which says nothing about the block's parameters. The reference
+// asks the signature for one before deciding whether a method is written in the
+// async convention.
+//
+// Measured on this platform: nil at every index tried, for a signature taken from
+// a real method as well as one built from a type encoding. So a caller that asks
+// for an async convention this way is told nothing, and answers NO. Declared in a
+// category rather than in the shim above because the call has to compile under
+// both SDKs, and the reduced one hides its Foundation headers inside the guard.
+@interface NSMethodSignature (XCTSDKCompatPrivateBlockSignature)
+- (nullable instancetype)_signatureForBlockAtArgumentIndex:(NSUInteger)index;
 @end
 
 #pragma mark - Failure reporting
