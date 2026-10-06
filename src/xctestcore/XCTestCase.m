@@ -1030,6 +1030,34 @@ static struct {
     }];
 }
 
++ (NSArray *)_testInvocationDescriptors
+{
+    // The branch order and meaning are as in the reference:
+    // 1. If the class overrides testInvocations, do not discover -- re-wrap the
+    //    invocations it already produced into descriptors with no convention and
+    //    no custom error message. That is the only branch that loses the
+    //    convention, because the method never read it.
+    // 2. Otherwise, if the class is inheriting test cases, gather the whole
+    //    hierarchy; else only the class's own methods.
+    if ([self overridesTestInvocations]) {
+        NSArray *invocations = [self testInvocations];
+        NSMutableArray *descriptors = [NSMutableArray arrayWithCapacity:invocations.count];
+        for (NSInvocation *invocation in invocations) {
+            NSString *selectorString = NSStringFromSelector(invocation.selector);
+            XCTTestInvocationDescriptor *descriptor = [[XCTTestInvocationDescriptor alloc]
+                initWithSelectorString:selectorString
+                            invocation:invocation
+                  customErrorMessage:nil];
+            [descriptors addObject:descriptor];
+        }
+        return [descriptors copy];
+    }
+    if ([self isInheritingTestCases]) {
+        return [self _allTestMethodInvocationDescriptors];
+    }
+    return [self _testMethodInvocationDescriptors];
+}
+
 /// Sorts a set of classes by class name, with the Swift module stripped, so a
 /// run is reproducible across processes -- where the runtime's class-list order
 /// is not. Sorting by the name a user would write is what the reference does;
@@ -1138,6 +1166,11 @@ static NSArray *_XCTSortedClassList(NSSet *classes)
     IMP base = method_getImplementation(class_getClassMethod([XCTestCase class], @selector(testInvocations)));
     IMP own = method_getImplementation(class_getClassMethod(self, @selector(testInvocations)));
     return own != base;
+}
+
++ (BOOL)isInheritingTestCases
+{
+    return YES;
 }
 
 #pragma mark - Availability

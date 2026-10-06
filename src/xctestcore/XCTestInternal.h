@@ -281,6 +281,7 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// inheriting XCTestCase's runtime selector scan. A class that overrides it is
 /// asked for the invocations a selection is filtering, one test at a time.
 + (BOOL)overridesTestInvocations;
++ (BOOL)isInheritingTestCases;
 
 /// Every test method the receiver itself declares, one descriptor each.
 ///
@@ -342,6 +343,14 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 /// where it differs from the neighbouring method -- rather than "corrected" to
 /// match.
 + (NSArray *)_allTestMethodInvocationDescriptors;
+
+/// Returns the test invocation descriptors for the class. If the class
+/// overrides -testInvocations, the result is those invocations mapped to
+/// descriptors. Otherwise, if the class inherits test cases, the hierarchy's
+/// discovered descriptors are returned; if not, only the class's own
+/// descriptors are returned.
++ (NSArray *)_testInvocationDescriptors;
++ (NSArray *)_testInvocationDescriptors;
 
 @end
 
