@@ -244,6 +244,79 @@ static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selec
            [XCTestCase instanceMethodForSelector:nameSelector];
 }
 
++ (SEL)_resolvedTestMethodSelectorForSelector:(SEL)selector
+{
+    // A name written by a selection is the name the source used, and the class
+    // may have implemented it under a signature suffix: `testFoo` is often
+    // really `testFooAndReturnError:` or `testFooWithCompletionHandler:`. Ask
+    // for the name as written and then for each suffixed spelling, in the
+    // reference's order, and answer nothing when the class has none of them --
+    // which is what stops an identifier being invented for a test that is not
+    // there to select.
+    if (selector == NULL) {
+        return NULL;
+    }
+    if ([self instancesRespondToSelector:selector]) {
+        return selector;
+    }
+    NSString *name = NSStringFromSelector(selector);
+    SEL errorSpelling =
+        NSSelectorFromString([name stringByAppendingString:@"AndReturnError:"]);
+    if ([self instancesRespondToSelector:errorSpelling]) {
+        return errorSpelling;
+    }
+    SEL completionSpelling =
+        NSSelectorFromString([name stringByAppendingString:@"WithCompletionHandler:"]);
+    if ([self instancesRespondToSelector:completionSpelling]) {
+        return completionSpelling;
+    }
+    return NULL;
+}
+
++ (XCTTestIdentifier *)_identifierForSelectorString:(NSString *)selectorString
+{
+    // The name is resolved before it is spelled out, because the two spellings
+    // of one test -- the one the source wrote and the one the class implements
+    // -- have to land on the same identifier or a selection written one way
+    // stops matching a tree built the other.
+    SEL selector = [self _resolvedTestMethodSelectorForSelector:
+                      NSSelectorFromString(selectorString)];
+    if (selector == NULL) {
+        return nil;
+    }
+    NSString *methodName = [self _languageSpecificTestMethodNameForSelector:selector];
+    return [[XCTTestIdentifier alloc] initWithClassName:NSStringFromClass(self)
+                                             methodName:methodName];
+}
+
++ (XCTTestIdentifier *)_identifierForInvocation:(NSInvocation *)invocation
+{
+    // A class that renames its whole method list answers YES to
+    // +customizesTestMethodNameViaOverrides, and then no name derived from an
+    // invocation can be trusted, so there is no identifier rather than a wrong
+    // one. The caller keeps the test: one that cannot be selected out is the
+    // safer answer beside one silently filed under another name.
+    if ([self customizesTestMethodNameViaOverrides]) {
+        return nil;
+    }
+    NSString *methodName = nil;
+    if ([self respondsToSelector:@selector(overridesTestMethodNameForInvocation:)] &&
+        [self overridesTestMethodNameForInvocation:invocation]) {
+        methodName = [self overriddenTestMethodNameForInvocation:invocation];
+    } else {
+        SEL selector = invocation.selector;
+        if (selector == NULL) {
+            return nil;
+        }
+        methodName = [self _languageSpecificTestMethodNameForSelector:selector];
+    }
+    if (methodName == nil) {
+        return nil;
+    }
+    return [[XCTTestIdentifier alloc] initWithClassName:NSStringFromClass(self)
+                                             methodName:methodName];
+}
+
 - (XCTTestIdentifier *)_uncachedIdentifierWithClassName:(NSString *)className
 {
     // First answer wins: an explicit rename, then the selector spelled with its

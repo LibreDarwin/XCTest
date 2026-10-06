@@ -22,6 +22,11 @@
 //     one a suite carries and the one its cases carry -- have to be the same
 //     string, or a selection written one way stops matching the tree built the
 //     other.
+//   - Identifiers from names. A selection carries method names rather than
+//     invocations, so a name has to become the identifier the tree is filtered
+//     by: through the signature suffixes the harness appends to a method, with
+//     the class's own rename hooks honoured, and with no answer at all when the
+//     class has no such method.
 //
 // It links the installed framework rather than the object files, so it also
 // covers installation and the private declarations in XCTestInternal.h, which is
@@ -1437,6 +1442,185 @@ static void testTestInvocationDescriptors(void)
 }
 @end
 
+#pragma mark - Identifiers from names
+
+// One test, spelled three ways. A selection carries the name the source wrote,
+// so each class below is asked to resolve that name back to what it actually
+// implements -- plainly, under an error-returning signature, or under a
+// completion-handler signature.
+@interface XCTIdentifierPlainFixture : XCTestCase
+- (void)testPlain;
+@end
+
+@interface XCTIdentifierErrorFixture : XCTestCase
+- (BOOL)testErrAndReturnError:(NSError **)error;
+@end
+
+@interface XCTIdentifierAsyncFixture : XCTestCase
+- (void)testAsyncWithCompletionHandler:(void (^)(void))completion;
+@end
+
+// Renames one invocation rather than its whole method list, through the
+// class-side hooks the reference gets from its multi-device category.
+@interface XCTIdentifierRenameFixture : XCTestCase
+- (void)testRenamed;
+- (void)testPlainToo;
+@end
+
+// Renames every method it runs, which is the question
+// +customizesTestMethodNameViaOverrides answers.
+@interface XCTIdentifierCustomizingFixture : XCTestCase
+- (void)testCustomized;
+@end
+
+static NSInvocation *identifierInvocation(Class cls, SEL selector)
+{
+    NSMethodSignature *signature = [cls instanceMethodSignatureForSelector:selector];
+    if (signature == nil) {
+        return nil;
+    }
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+    invocation.selector = selector;
+    return invocation;
+}
+
+static void testIdentifiersFromNames(void)
+{
+    printf("identifiers from names\n");
+
+    // Resolution: which selector a class really has for a name a selection may
+    // spell out. The plain name is the one the source wrote, and the class may
+    // have implemented it with a signature suffix instead.
+    ok("a name the class implements resolves to itself",
+       [XCTIdentifierPlainFixture _resolvedTestMethodSelectorForSelector:
+           @selector(testPlain)] == @selector(testPlain), nil);
+    ok("a name the class does not implement resolves to nothing",
+       [XCTIdentifierPlainFixture _resolvedTestMethodSelectorForSelector:
+           NSSelectorFromString(@"testAbsent")] == NULL, nil);
+    ok("a plain name resolves to the error-returning spelling",
+       [XCTIdentifierErrorFixture _resolvedTestMethodSelectorForSelector:
+           NSSelectorFromString(@"testErr")] == @selector(testErrAndReturnError:), nil);
+    ok("a plain name resolves to the completion-handler spelling",
+       [XCTIdentifierAsyncFixture _resolvedTestMethodSelectorForSelector:
+           NSSelectorFromString(@"testAsync")]
+           == @selector(testAsyncWithCompletionHandler:), nil);
+    ok("an empty name resolves to nothing",
+       [XCTIdentifierPlainFixture _resolvedTestMethodSelectorForSelector:
+           NSSelectorFromString(@"")] == NULL, nil);
+
+    // A name carried by a selection becomes the identifier the tree is filtered
+    // by, and it must be the same identifier the case would build for itself.
+    XCTTestIdentifier *plain =
+        [XCTIdentifierPlainFixture _identifierForSelectorString:@"testPlain"];
+    ok("a name the class implements names a test",
+       [plain.identifierString isEqualToString:@"XCTIdentifierPlainFixture/testPlain"],
+       plain.identifierString);
+    XCTTestIdentifier *missing =
+        [XCTIdentifierPlainFixture _identifierForSelectorString:@"testAbsent"];
+    ok("a name the class does not implement names nothing", missing == nil, nil);
+    XCTTestIdentifier *errorForm =
+        [XCTIdentifierErrorFixture _identifierForSelectorString:@"testErr"];
+    ok("an error-returning method is named without its signature suffix",
+       [errorForm.identifierString
+           isEqualToString:@"XCTIdentifierErrorFixture/testErr"],
+       errorForm.identifierString);
+    XCTTestIdentifier *asyncForm =
+        [XCTIdentifierAsyncFixture _identifierForSelectorString:@"testAsync"];
+    ok("a completion-handler method is named without its signature suffix",
+       [asyncForm.identifierString
+           isEqualToString:@"XCTIdentifierAsyncFixture/testAsync"],
+       asyncForm.identifierString);
+
+    // An invocation names a test the same way, unless the class renames it.
+    XCTTestIdentifier *byInvocation = [XCTIdentifierPlainFixture
+        _identifierForInvocation:identifierInvocation([XCTIdentifierPlainFixture class],
+                                                      @selector(testPlain))];
+    ok("an invocation names a test",
+       [byInvocation.identifierString isEqualToString:@"XCTIdentifierPlainFixture/testPlain"],
+       byInvocation.identifierString);
+    XCTTestIdentifier *renamed = [XCTIdentifierRenameFixture
+        _identifierForInvocation:identifierInvocation([XCTIdentifierRenameFixture class],
+                                                      @selector(testRenamed))];
+    ok("an invocation the class renames is named by the rename",
+       [renamed.identifierString
+           isEqualToString:@"XCTIdentifierRenameFixture/renamedByHook"],
+       renamed.identifierString);
+    XCTTestIdentifier *notRenamed = [XCTIdentifierRenameFixture
+        _identifierForInvocation:identifierInvocation([XCTIdentifierRenameFixture class],
+                                                      @selector(testPlainToo))];
+    ok("an invocation the class leaves alone is named by its selector",
+       [notRenamed.identifierString
+           isEqualToString:@"XCTIdentifierRenameFixture/testPlainToo"],
+       notRenamed.identifierString);
+    XCTTestIdentifier *customized = [XCTIdentifierCustomizingFixture
+        _identifierForInvocation:identifierInvocation([XCTIdentifierCustomizingFixture class],
+                                                      @selector(testCustomized))];
+    ok("a class that renames its method list is named by nothing",
+       customized == nil, customized.identifierString);
+
+    // An invocation built but never given a selector names no test, which is
+    // the answer the caller needs in order to keep it rather than filter it.
+    NSMethodSignature *signature =
+        [XCTIdentifierPlainFixture instanceMethodSignatureForSelector:@selector(testPlain)];
+    NSInvocation *unnamed = [NSInvocation invocationWithMethodSignature:signature];
+    ok("an invocation that names no selector names nothing",
+       [XCTIdentifierPlainFixture _identifierForInvocation:unnamed] == nil, nil);
+}
+
+@implementation XCTIdentifierPlainFixture
+- (void)testPlain
+{
+}
+@end
+
+@implementation XCTIdentifierErrorFixture
+- (BOOL)testErrAndReturnError:(NSError **)error
+{
+    (void)error;
+    return YES;
+}
+@end
+
+@implementation XCTIdentifierAsyncFixture
+- (void)testAsyncWithCompletionHandler:(void (^)(void))completion
+{
+    if (completion != nil) {
+        completion();
+    }
+}
+@end
+
+@implementation XCTIdentifierRenameFixture
++ (BOOL)overridesTestMethodNameForInvocation:(NSInvocation *)invocation
+{
+    return invocation.selector == @selector(testRenamed);
+}
+
++ (NSString *)overriddenTestMethodNameForInvocation:(NSInvocation *)invocation
+{
+    return invocation.selector == @selector(testRenamed) ? @"renamedByHook" : nil;
+}
+
+- (void)testRenamed
+{
+}
+
+- (void)testPlainToo
+{
+}
+@end
+
+@implementation XCTIdentifierCustomizingFixture
+- (NSString *)languageAgnosticTestMethodName
+{
+    return @"renamedEverywhere";
+}
+
+- (void)testCustomized
+{
+}
+@end
+
 #pragma mark - Class from string
 
 static void testClassFromString(void)
@@ -2517,6 +2701,7 @@ int main(void)
     testMethodInvocationDescriptors();
     testAllMethodInvocationDescriptors();
     testTestInvocationDescriptors();
+    testIdentifiersFromNames();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();

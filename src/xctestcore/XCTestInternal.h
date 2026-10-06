@@ -626,6 +626,44 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 /// a Swift class, carrying the argument-arity suffix a Swift spelling has.
 + (nullable NSString *)_languageSpecificTestMethodNameForSelector:(SEL)selector;
 
+/// The selector this class really implements for the name `selector` spells, or
+/// NULL when it implements none of them.
+///
+/// A name written by a selection is the name the source used, and the class may
+/// have implemented it with a signature suffix: the plain spelling is asked for
+/// first, then each suffixed one, in the reference's order. NULL is the answer
+/// for a name the class has no method for, which is what keeps an identifier
+/// from being invented for a test that does not exist.
++ (SEL)_resolvedTestMethodSelectorForSelector:(SEL)selector;
+
+/// The identifier for the selector string `selectorString` spells, or nil when
+/// the class has no method of that name.
+///
+/// A selection carries names rather than invocations, so this is where a
+/// selection is turned back into the identifier a suite tree is filtered by.
++ (nullable XCTTestIdentifier *)_identifierForSelectorString:(NSString *)selectorString;
+
+/// The identifier for `invocation`, or nil when no name can be trusted for it.
+///
+/// Nil is a real answer rather than a failure. A class that renames its whole
+/// method list is refused here, and an invocation that names no selector at all
+/// cannot yield a name; the caller keeps the test, because a test with no
+/// identifier cannot be selected out, which is the safer of the two answers.
++ (nullable XCTTestIdentifier *)_identifierForInvocation:(NSInvocation *)invocation;
+
+/// The class-side rename hooks: whether *this* invocation is renamed, rather
+/// than every method the class runs, and the name to use when it is.
+///
+/// Declared and never implemented here on purpose. The reference sends both
+/// unconditionally and gets its answer from a category in
+/// `xctestswiftsupport`, the multi-device UIAutomation machinery this port does
+/// not carry, so `+_identifierForInvocation:` probes for the first one instead
+/// of sending it. A class -- or a category on it -- that does implement them is
+/// picked up normally; an absent implementation is the "no" the reference's own
+/// would have answered.
++ (BOOL)overridesTestMethodNameForInvocation:(NSInvocation *)invocation;
++ (nullable NSString *)overriddenTestMethodNameForInvocation:(NSInvocation *)invocation;
+
 /// The identifier, built without consulting the cache. Split out because the
 /// cache's initializer runs under @synchronized and must not re-enter the
 /// getter.
