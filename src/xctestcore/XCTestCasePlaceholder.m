@@ -16,9 +16,11 @@
 // here makes the pair readable without cross-referencing three files, and the
 // split would buy nothing while they stay this small.
 
+#import <XCTest/XCTestObservationCenter.h>
 #import <XCTestCore/XCTTestSelection.h>
 
 #import "XCTestInternal.h"
+#import "XCTestObservationInternal.h"
 
 /// Raises one of the reference's parameter assertions.
 ///
@@ -162,6 +164,21 @@ static void _XCTRaiseAssertionFailure(NSString *description)
 - (XCTestCasePlaceholder *)placeholder
 {
     return (XCTestCasePlaceholder *)self.test;
+}
+
+/// The skip a placeholder records is also an event about unavailability, so the
+/// inherited bookkeeping runs first and the reporting follows it: the observer
+/// is told a placeholder became unavailable only once the run agrees it has.
+/// The description is the reason -- -performTest: passes the placeholder's own,
+/// and nothing else records a skip on this run -- so it is forwarded as one.
+- (void)recordSkipWithDescription:(NSString *)description
+               sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext
+{
+    [super recordSkipWithDescription:description
+                   sourceCodeContext:sourceCodeContext];
+    [[XCTestObservationCenter sharedTestObservationCenter]
+        _testCasePlaceholderRun:self
+         isUnavailableWithReason:description];
 }
 
 @end

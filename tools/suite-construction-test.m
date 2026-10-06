@@ -441,6 +441,45 @@ static NSUInteger ActivityObserverOrder = 0;
 }
 @end
 
+// Conforms to the reporting protocol one level above _XCTestObservationPrivate,
+// which inherits it -- so registration has to place this observer in the
+// internal, the private and the public lists at once. Implements one public
+// callback as well, to pin that the narrower protocols are additive rather
+// than a replacement, and records the placeholder event it is sent.
+@interface PlaceholderObserverFixture : NSObject <_XCTestObservationInternal>
+@property (nonatomic) BOOL sawUnavailable;
+@property (nonatomic) XCTestCasePlaceholder *unavailablePlaceholder;
+@property (nonatomic) NSString *unavailableReason;
+@property (nonatomic) BOOL sawPublicSuiteStart;
+@end
+
+@implementation PlaceholderObserverFixture
+- (void)testCasePlaceholder:(XCTestCasePlaceholder *)placeholder
+       isUnavailableWithReason:(NSString *)reason
+{
+    self.sawUnavailable = YES;
+    self.unavailablePlaceholder = placeholder;
+    self.unavailableReason = reason;
+}
+- (void)testSuiteWillStart:(XCTestSuite *)testSuite
+{
+    self.sawPublicSuiteStart = YES;
+}
+@end
+
+// The one run shape the center lets through without checking: a run whose test
+// is nil cannot be checked, so there is nothing to refuse.
+@interface NilTestRun : NSObject
+- (XCTest *)test;
+@end
+
+@implementation NilTestRun
+- (XCTest *)test
+{
+    return nil;
+}
+@end
+
 #pragma mark - Runtime facts
 
 static void testRuntimeFacts(void)
@@ -1988,6 +2027,102 @@ static void testActivityObservation(void)
     }
 }
 
+static void testPlaceholderObservation(void)
+{
+    // A placeholder reports its own skip through the reporting protocol above
+    // the private one, and that protocol refines the private one -- so an
+    // observer reaching it has to be in more than one list. The checks below
+    // cover the routing before the delivery: an internal observer must not lose
+    // the callbacks an exclusive-list split would have taken from it.
+    XCTestObservationCenter *center = [XCTestObservationCenter sharedTestObservationCenter];
+
+    PlaceholderObserverFixture *internal = [[PlaceholderObserverFixture alloc] init];
+    ActivityObserverFixture *privateOnly = [[ActivityObserverFixture alloc] init];
+    PublicObserverFixture *publicOnly = [[PublicObserverFixture alloc] init];
+
+    [center addTestObserver:internal];
+    [center addTestObserver:privateOnly];
+    [center addTestObserver:publicOnly];
+
+    ok("an internal observer is registered for the internal protocol",
+       [center.internalObservers containsObject:internal], nil);
+    ok("an internal observer is registered for the private protocol too",
+       [center.privateObservers containsObject:internal], nil);
+    ok("a private observer is registered for the private protocol",
+       [center.privateObservers containsObject:privateOnly], nil);
+    ok("a private observer is not registered for the internal protocol",
+       ![center.internalObservers containsObject:privateOnly], nil);
+    ok("a public observer is not registered for the private protocol",
+       ![center.privateObservers containsObject:publicOnly], nil);
+    ok("a public observer is not registered for the internal protocol",
+       ![center.internalObservers containsObject:publicOnly], nil);
+
+    // Additive rather than exclusive: opting into the narrower protocols must
+    // not cost the internal observer its public callbacks.
+    [center testSuiteWillStart:[XCTestSuite testSuiteWithName:@"Ping"]];
+    ok("an internal observer still receives public callbacks",
+       internal.sawPublicSuiteStart, nil);
+    internal.sawPublicSuiteStart = NO;
+    [center removeTestObserver:internal];
+    ok("removal clears the internal list",
+       ![center.internalObservers containsObject:internal], nil);
+    ok("removal leaves the private list alone",
+       [center.privateObservers containsObject:privateOnly], nil);
+
+    // End to end: performing a placeholder drives the whole path, from the run
+    // recording its skip to the observer being handed the unavailability.
+    NSString *reason = @"Test is unavailable since it has no invocation";
+    XCTestCasePlaceholder *placeholder =
+        [[XCTestCasePlaceholder alloc]
+            initWithIdentifier:[[XCTTestIdentifier alloc]
+                                   initWithStringRepresentation:@"MyTests/testFoo"]
+                        reason:reason];
+    [center addTestObserver:internal];
+    XCTestCasePlaceholderRun *performedRun =
+        [[XCTestCasePlaceholderRun alloc] initWithTest:placeholder];
+    [placeholder performTest:performedRun];
+    ok("performing a placeholder reports the placeholder",
+       internal.unavailablePlaceholder == placeholder, nil);
+    ok("performing a placeholder reports the reason",
+       [internal.unavailableReason isEqualToString:reason],
+       internal.unavailableReason);
+    ok("performing a placeholder still marks the run skipped",
+       performedRun.hasBeenSkipped, nil);
+
+    // A run reporting the placeholder event for a test that is not one is the
+    // runner asserting against itself; the reference refuses and so does this.
+    // The refusal carries the reference's own text, so it is matched by the
+    // run's test rather than just by the exception name.
+    XCTestCase *aCase = [XCTSuiteConstructionPlainFixture testCaseWithSelector:@selector(testExample)];
+    XCTestRun *oddRun = [[XCTestRun alloc] initWithTest:aCase];
+    BOOL raised = NO;
+    NSString *raisedReason = nil;
+    @try {
+        [center _testCasePlaceholderRun:(XCTestCasePlaceholderRun *)oddRun
+                 isUnavailableWithReason:@"surprise"];
+    } @catch (NSException *exception) {
+        raised = YES;
+        raisedReason = exception.reason;
+    }
+    ok("a run whose test is not a placeholder is refused", raised, raisedReason);
+    ok("the refusal names the run's test",
+       [raisedReason rangeOfString:@"Reported test case event for non-XCTestCasePlaceholder instance"]
+           .location != NSNotFound,
+       raisedReason);
+
+    // A run with no test at all is the one shape that cannot be checked, and
+    // the reference lets it through rather than inventing a test to assert
+    // against.
+    internal.sawUnavailable = NO;
+    [center _testCasePlaceholderRun:(XCTestCasePlaceholderRun *)[[NilTestRun alloc] init]
+             isUnavailableWithReason:@"no test"];
+    ok("a run with no test is reported without refusal",
+       internal.sawUnavailable, nil);
+
+    [center removeTestObserver:internal];
+    [center removeTestObserver:privateOnly];
+}
+
 void testActivityRecord(void)
 {
     // These are about the recovered semantics rather than about the plumbing: a
@@ -2860,6 +2995,7 @@ int main(void)
     testContextDelegate();
     testActivityReportingFilter();
     testActivityObservation();
+    testPlaceholderObservation();
     testActivityRecord();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;

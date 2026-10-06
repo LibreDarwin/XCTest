@@ -19,6 +19,11 @@ NS_ASSUME_NONNULL_BEGIN
 @class XCTestSuite;
 @class XCTIssue;
 @class XCTExpectedFailure;
+// Private classes, so only ever named as an argument that is forwarded to an
+// observer; a forward declaration is enough and keeps this header free of the
+// private header that defines them.
+@class XCTestCasePlaceholder;
+@class XCTestCasePlaceholderRun;
 // Defined by the later activity increments. Both are only ever forwarded to an
 // observer, so the observation center never needs to know their layout and a
 // forward declaration is enough to keep the hooks compiling here.
@@ -48,6 +53,32 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+/// The reporting layer above _XCTestObservationPrivate: callbacks the runner
+/// wants told about but that are not part of the activity contract. It inherits
+/// _XCTestObservationPrivate so that a reporter declaring interest in one level
+/// is routed into both lists -- the reference's -_addTestObserver:atStart: adds
+/// an observer to every list whose protocol it conforms to, never to exactly
+/// one, so conforming here costs an observer nothing it was receiving before.
+@protocol _XCTestObservationInternal <_XCTestObservationPrivate>
+
+@optional
+
+/// Declared for completeness: the reference declares it on this protocol, above
+/// the case-level skip it inherits. Nothing reports a suite skip yet, so there
+/// is no sender for it here.
+- (void)testSuite:(XCTestSuite *)testSuite
+    didRecordSkipWithDescription:(NSString *)description
+                 sourceCodeContext:(nullable XCTSourceCodeContext *)sourceCodeContext;
+
+/// Handed the placeholder and the reason its run recorded a skip, after the run
+/// set -hasBeenSkipped. This is the one reporter-facing word that an unavailable
+/// test exists: -[XCTestCase performTest:] has nothing to report because there
+/// is no invocation to run.
+- (void)testCasePlaceholder:(XCTestCasePlaceholder *)placeholder
+       isUnavailableWithReason:(NSString *)reason;
+
+@end
+
 @interface XCTestObservationCenter (XCTInternalBroadcast)
 
 - (void)testBundleWillStart:(NSBundle *)testBundle;
@@ -73,15 +104,31 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_context:(XCTContext *)context
     didFinishActivity:(XCActivityRecord *)activity;
 
+/// The reporting protocol's placeholder callback. `run`'s test being a
+/// placeholder is what makes this event coherent; anything else is the runner
+/// reporting an event for a test that does not produce one, which the
+/// reference answers with an assertion before broadcasting anyway.
+- (void)_testCasePlaceholderRun:(XCTestCasePlaceholderRun *)run
+       isUnavailableWithReason:(NSString *)reason;
+
 @end
 
 /// Private observers and the dispatch they are called through.
 @interface XCTestObservationCenter (XCTInternalPrivateObservers)
 
-/// Observers registered for the private protocol, kept apart from the public
-/// ones so that a public reporter never has to implement -- or filter out -- a
-/// callback it has no use for.
+/// Observers registered for the private protocol. Registration is additive:
+/// an observer conforming to _XCTestObservationPrivate is in this list *and*
+/// in the public one, so declaring interest in activity does not cost a
+/// reporter its public callbacks. What keeps the two apart is conformance,
+/// not membership -- a reporter that never implemented an activity callback
+/// never conforms and so is never handed a context and a record it has no
+/// way to interpret.
 - (NSArray<id<_XCTestObservationPrivate>> *)privateObservers;
+
+/// The same snapshot for the reporting protocol one level above it, which
+/// _XCTestObservationInternal inherits. Both getters copy before returning,
+/// so a broadcast cannot be handed a list it is concurrently mutating.
+- (NSArray<id<_XCTestObservationInternal>> *)internalObservers;
 
 /// Suppresses every broadcast, public and private, while set. The runner
 /// suspends observation while it tears down and re-arms the reporter stack, so

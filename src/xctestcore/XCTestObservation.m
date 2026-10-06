@@ -18,6 +18,10 @@
 // one shared place so the two sides cannot drift.
 #import "XCTestObservationInternal.h"
 
+// The placeholder whose run is asserted below, and the XCTest it is asserted
+// against. Both are private classes; this header is where they are declared.
+#import "XCTestInternal.h"
+
 // The SDK's Foundation headers omit -removeObjectIdenticalTo:; the runtime has
 // it. See the header for how that was established.
 #import "XCTestFoundationCompat.h"
@@ -26,15 +30,32 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Raises one of the reference's assertions.
+///
+/// NSAssertionHandler cannot be reached for the reason XCTestRun.m gives: the
+/// reduced <Foundation/NSException.h> omits it, and NSAssert raises through it.
+/// What is raised is what the handler would have raised -- the same exception
+/// name and the same text. The file and line the reference passes to
+/// -handleFailureInMethod:object:file:lineNumber:description: are dropped
+/// because nothing reads them here.
+static void _XCTRaiseAssertionFailure(NSString *description)
+{
+    [[NSException exceptionWithName:NSInternalInconsistencyException
+                              reason:description
+                            userInfo:nil] raise];
+}
+
 @implementation XCTestObservationCenter
 {
     // Guarded by _lock. Enumeration always runs over a snapshot taken under the
     // lock, so an observer that adds or removes observers from inside a callback
     // -- legal, if unusual -- cannot mutate the collection mid-broadcast.
     NSMutableArray<id<XCTestObservation>> *_observers;
-    // Same locking and snapshot rules as _observers, and kept separately so the
-    // two protocols cannot observe each other.
+    // Same locking and snapshot rules as _observers. Registration is additive,
+    // so these narrow the audience rather than compete with the public list: an
+    // observer that conforms to a protocol is in this list *and* in _observers.
     NSMutableArray<id<_XCTestObservationPrivate>> *_privateObservers;
+    NSMutableArray<id<_XCTestObservationInternal>> *_internalObservers;
     NSLock *_lock;
     BOOL _suspended;
 }
@@ -55,6 +76,7 @@ NS_ASSUME_NONNULL_BEGIN
     if (self != nil) {
         _observers = [NSMutableArray array];
         _privateObservers = [NSMutableArray array];
+        _internalObservers = [NSMutableArray array];
         _lock = [[NSLock alloc] init];
     }
     return self;
@@ -70,17 +92,22 @@ NS_ASSUME_NONNULL_BEGIN
 
     [_lock lock];
     // Routing is by protocol conformance, not by which methods the observer
-    // implements, and an observer lands in exactly one list. _XCTestObservation
-    // Private refines XCTestObservation rather than extending it, so an observer
-    // that opts in to the private protocol is served by the private list alone
-    // and does not also receive the public suite, case and issue callbacks.
+    // implements, and registration is additive rather than exclusive: the
+    // reference's -_addTestObserver:atStart: puts an observer in every list
+    // whose protocol it conforms to, so opting into a narrower protocol narrows
+    // which callbacks are sent, never which ones are received. _XCTestObservation
+    // Private refines XCTestObservation and _XCTestObservationInternal refines
+    // _XCTestObservationPrivate, so an observer reaches the reporting protocol
+    // by conforming to it and lands in all three lists at once.
+    //
+    // The conformance tests are what justify the two downcasts; each protocol
+    // refines rather than extends its parent, so the compiler cannot infer them.
+    [_observers addObject:testObserver];
     if ([testObserver conformsToProtocol:@protocol(_XCTestObservationPrivate)]) {
-        // The conformance test above is what justifies the narrowing; the
-        // protocol refines XCTestObservation rather than extending it, so the
-        // compiler cannot infer the downcast on its own.
         [_privateObservers addObject:(id<_XCTestObservationPrivate>)testObserver];
-    } else {
-        [_observers addObject:testObserver];
+    }
+    if ([testObserver conformsToProtocol:@protocol(_XCTestObservationInternal)]) {
+        [_internalObservers addObject:(id<_XCTestObservationInternal>)testObserver];
     }
     [_lock unlock];
 }
@@ -95,10 +122,12 @@ NS_ASSUME_NONNULL_BEGIN
     // Identity, not equality: two distinct observers may compare equal, and
     // removing the wrong one would silently stop a reporter from being called.
     [_observers removeObjectIdenticalTo:testObserver];
-    // Removed from both lists, since registration can put an observer in either
-    // and a half-removed observer would keep receiving activity callbacks after
-    // the caller believes it has been detached.
+    // Removed from every list registration could have put it in, since an
+    // observer is in as many as it conforms to and a half-removed one would
+    // keep receiving the narrower callbacks after the caller believes it has
+    // been detached.
     [_privateObservers removeObjectIdenticalTo:(id<_XCTestObservationPrivate>)testObserver];
+    [_internalObservers removeObjectIdenticalTo:(id<_XCTestObservationInternal>)testObserver];
     [_lock unlock];
 }
 
@@ -106,6 +135,14 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [_lock lock];
     NSArray<id<_XCTestObservationPrivate>> *snapshot = [_privateObservers copy];
+    [_lock unlock];
+    return snapshot;
+}
+
+- (NSArray<id<_XCTestObservationInternal>> *)internalObservers
+{
+    [_lock lock];
+    NSArray<id<_XCTestObservationInternal>> *snapshot = [_internalObservers copy];
     [_lock unlock];
     return snapshot;
 }
@@ -301,6 +338,39 @@ NS_ASSUME_NONNULL_BEGIN
                           reverse:YES
                              block:^(id<_XCTestObservationPrivate> observer) {
         [observer _context:context didFinishActivity:activity];
+    }];
+}
+
+/// Reports that a placeholder run recorded the skip standing in for the test it
+/// could not build.
+///
+/// This is its own event rather than a case skip because nothing here happened
+/// to a test: -[XCTestCase performTest:] records the skip because there was no
+/// invocation to run, and a reporter reading that as a case skip could not tell
+/// an unavailable test from one that called -skip. The reason is the whole
+/// payload, so it is carried alongside the placeholder instead of folded into a
+/// description.
+- (void)_testCasePlaceholderRun:(XCTestCasePlaceholderRun *)run
+       isUnavailableWithReason:(NSString *)reason
+{
+    XCTest *test = [run test];
+    if (test != nil && ![test isKindOfClass:[XCTestCasePlaceholder class]]) {
+        // A run reporting an event only a placeholder run produces. The
+        // reference asserts at XCTestObservationCenter.m:367 and, since an
+        // assertion handler raises, never reaches the broadcast; raising here
+        // has the same effect. A run with no test at all is the one case that
+        // is allowed through, because there is nothing to check it against.
+        _XCTRaiseAssertionFailure([NSString stringWithFormat:
+            @"Reported test case event for non-XCTestCasePlaceholder instance %@",
+            test]);
+    }
+
+    [self _performBlockOnObservers:self.internalObservers
+             respondingToSelector:@selector(testCasePlaceholder:isUnavailableWithReason:)
+                          reverse:NO
+                             block:^(id<_XCTestObservationInternal> observer) {
+        [observer testCasePlaceholder:(XCTestCasePlaceholder *)test
+               isUnavailableWithReason:reason];
     }];
 }
 
