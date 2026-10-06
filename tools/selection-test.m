@@ -770,7 +770,39 @@ static void testStructure(void)
        suite.identifierString);
     ok("a three-component identifier names its bundle", one.representsBundle, nil);
     ok("a two-component identifier does not", !suite.representsBundle, nil);
-    ok("displayName is the last component", [one.displayName isEqualToString:@"testOne"], one.displayName);
+    ok("displayName of a path is the path", [one.displayName isEqualToString:@"Bundle/Suite/testOne"],
+       one.displayName);
+    ok("displayName of a suite is its path", [suite.displayName isEqualToString:@"Bundle/Suite"],
+       suite.displayName);
+    ok("displayName of a one-component identifier is that component",
+       [bundle.displayName isEqualToString:@"Bundle"], bundle.displayName);
+    ok("displayName of an identifier with no components is the bundle placeholder",
+       [identifier(@[ ], XCTTestIdentifierOptionContainer).displayName isEqualToString:@"<bundle>"], nil);
+    ok("lastComponent of a path is its last component",
+       [one.lastComponent isEqualToString:@"testOne"], one.lastComponent);
+
+    // Under the class-and-method spelling a pair of components reads as the
+    // source expression the test is written as, not as a path.
+    XCTTestIdentifier *objcMethod = identifier(@[ @"MyClass", @"testFoo" ],
+                                               XCTTestIdentifierOptionClassAndMethod);
+    ok("displayName of an Objective-C method is its source expression",
+       [objcMethod.displayName isEqualToString:@"-[MyClass testFoo]"], objcMethod.displayName);
+    ok("lastComponentDisplayName of an Objective-C method is the method",
+       [objcMethod.lastComponentDisplayName isEqualToString:@"testFoo"], nil);
+    ok("displayNameComponents of an Objective-C method is the path",
+       [objcMethod.displayNameComponents isEqualToArray:@[ @"MyClass", @"testFoo" ]], nil);
+
+    XCTTestIdentifier *swiftMethod = identifier(@[ @"MyClass", @"testFoo" ],
+                                                XCTTestIdentifierOptionClassAndMethod |
+                                                    XCTTestIdentifierOptionSwiftMethod);
+    ok("displayName of a Swift method carries its empty argument list",
+       [swiftMethod.displayName isEqualToString:@"MyClass.testFoo()"], swiftMethod.displayName);
+    ok("lastComponentDisplayName of a Swift method carries the argument list",
+       [swiftMethod.lastComponentDisplayName isEqualToString:@"testFoo()"],
+       swiftMethod.lastComponentDisplayName);
+    ok("displayNameComponents rewrites only the last component of a Swift method",
+       [swiftMethod.displayNameComponents isEqualToArray:@[ @"MyClass", @"testFoo()" ]], nil);
+
     ok("firstComponent", [one.firstComponent isEqualToString:@"Bundle"], nil);
     ok("lastComponent", [one.lastComponent isEqualToString:@"testOne"], one.lastComponent);
     ok("lastComponent of a suite is the suite, not a test",

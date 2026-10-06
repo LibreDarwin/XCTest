@@ -667,14 +667,73 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
     return YES;
 }
 
-- (NSString *)displayName
+/// The class-and-method spelling of a two-component identifier: the source
+/// expression a test is written as, which is what a run log and a failure
+/// message quote it by.
+- (NSString *)_displayNameForClassAndMethodStyle
 {
-    return self.lastComponent ?: @"";
+    NSArray<NSString *> *components = self.components;
+    if (components.count != 2) {
+        // As in -_initWithClassAndMethodComponents: this SDK declares the
+        // assertion handler but does not export it, so the same failure is
+        // raised directly rather than reached through it. The caller has
+        // already asked for the pair, so this is a guard against a future
+        // caller that has not.
+        [[NSException exceptionWithName:NSInternalInconsistencyException
+                                 reason:@"the class-and-method spelling needs a class and a method"
+                               userInfo:nil] raise];
+    }
+    if (self.isSwiftMethod) {
+        return [NSString stringWithFormat:@"%@.%@%@", components[0], components[1], @"()"];
+    }
+    return [NSString stringWithFormat:@"-[%@ %@]", components[0], components[1]];
+}
+
+- (NSString *)lastComponentDisplayName
+{
+    NSString *last = self.lastComponent;
+    if (self.usesClassAndMethodSemantics && self.isSwiftMethod) {
+        return [last stringByAppendingString:@"()"];
+    }
+    return last;
 }
 
 - (NSArray<NSString *> *)displayNameComponents
 {
+    // The path, with the last component spelled the way -displayName spells it.
+    // Only a Swift method under the class-and-method spelling spells it
+    // differently, and only that spelling is worth copying the array for.
+    if (self.usesClassAndMethodSemantics && self.isSwiftMethod) {
+        NSString *last = self.lastComponentDisplayName;
+        if (last != nil) {
+            NSMutableArray<NSString *> *components = [self.components mutableCopy];
+            [components removeLastObject];
+            [components addObject:last];
+            return [components copy];
+        }
+    }
     return self.components;
+}
+
+- (NSString *)displayName
+{
+    // A class and a method read as a source expression. Everything else reads
+    // as the path it is at, which is how a suite, a bundle, and a
+    // single-component name are each written.
+    switch (self.componentCount) {
+        case 0:
+            return @"<bundle>";
+        case 1:
+            return self.firstComponent;
+        case 2:
+            if (self.usesClassAndMethodSemantics) {
+                return [self _displayNameForClassAndMethodStyle];
+            }
+            break;
+        default:
+            break;
+    }
+    return [self.components componentsJoinedByString:@"/"];
 }
 
 - (BOOL)isEqual:(id)object

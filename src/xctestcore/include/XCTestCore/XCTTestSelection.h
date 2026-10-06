@@ -203,9 +203,20 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 /// receiver names something inside that argument.
 - (BOOL)isAncestorOfTestIdentifier:(XCTTestIdentifier *)identifier;
 
-/// The name shown in a test log, which is the last component.
+/// The name shown in a test log. A class and a method read as the source
+/// expression a test is written as; anything else reads as its path, because a
+/// suite or a bundle has no shorter name than the path it sits at.
 @property (nonatomic, readonly, copy) NSString *displayName;
+
+/// The components of -displayName: the path, with the last component spelled
+/// the way -displayName spells it.
 @property (nonatomic, readonly, copy) NSArray<NSString *> *displayNameComponents;
+
+/// -lastComponent with a Swift method's empty argument list attached, which is
+/// the only thing telling it from the Objective-C method of the same name. The
+/// last component itself when the receiver is not a Swift method under the
+/// class-and-method spelling.
+@property (nonatomic, readonly, copy, nullable) NSString *lastComponentDisplayName;
 
 @end
 
