@@ -1392,6 +1392,51 @@ static void testAllMethodInvocationDescriptors(void)
        @"an immutable array accepted an addition");
 }
 
+@interface XCTSuiteConstructionOverrideFixture : XCTestCase
+- (void)testFromOverride;
+@end
+
+static void testTestInvocationDescriptors(void)
+{
+    printf("test invocation descriptors\n");
+    // overridesTestInvocations branch: maps invocations to descriptors, loses convention
+    NSArray *overridden = [XCTSuiteConstructionOverrideFixture _testInvocationDescriptors];
+    ok("overridden fixture yields descriptors from testInvocations",
+       overridden != nil && overridden.count == 1, nil);
+    if (overridden.count == 1) {
+        XCTTestInvocationDescriptor *d = overridden[0];
+        ok("overridden descriptor keeps selector and invocation",
+           [d.selectorString isEqualToString:@"testFromOverride"] && d.invocation != nil, nil);
+        ok("overridden descriptor has no convention when mapped",
+           d.convention == nil, nil);
+        ok("overridden descriptor has no custom error message",
+           d.customErrorMessage == nil, nil);
+    }
+    // inherits test cases (default): hierarchy path
+    NSArray *hier = [XCTSuiteConstructionDiscoverySubclass _testInvocationDescriptors];
+    ok("default inherits path gives hierarchy descriptors",
+       hier.count == 3, joinedSelectorNames(hier)); // same as before
+}
+
+
+@implementation XCTSuiteConstructionOverrideFixture
++ (NSArray<NSInvocation *> *)testInvocations
+{
+    NSMutableArray *invocations = [NSMutableArray array];
+    NSMethodSignature *sig = [self instanceMethodSignatureForSelector:@selector(testFromOverride)];
+    if (sig != nil) {
+        NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+        inv.selector = @selector(testFromOverride);
+        inv.target = self;
+        [invocations addObject:inv];
+    }
+    return invocations;
+}
+- (void)testFromOverride
+{
+}
+@end
+
 #pragma mark - Class from string
 
 static void testClassFromString(void)
@@ -2471,6 +2516,7 @@ int main(void)
     testDescriptorRejection();
     testMethodInvocationDescriptors();
     testAllMethodInvocationDescriptors();
+    testTestInvocationDescriptors();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();
