@@ -239,6 +239,20 @@ XCT_EXPORT void _XCTRecordIssueOnTestCase(XCTestCase *_Nullable testCase,
 @property (readwrite) NSUInteger failureCount;
 @property (readwrite) NSUInteger unexpectedExceptionCount;
 @property (readwrite) BOOL hasBeenSkipped;
+
+/// Records that the receiver was skipped, without an XCTIssue behind it.
+///
+/// The distinction from -recordIssue: with an `XCTIssueTypeSkippedTest` issue is
+/// the whole point: that path counts the skip, this one only marks it. The
+/// reference's own use is a test that could not be constructed at all, where
+/// there is nothing to attribute a failure to and the report wants a single
+/// "skipped" row rather than a counted failure. So -description and -sourceCodeContext
+/// are accepted for the signature and not consulted, and -skipCount is left at
+/// zero. The precondition checks are the reference's, raised as exceptions
+/// rather than NSAssert because this port has no NSAssertionHandler to raise
+/// through (see XCTestConfigurationLoader.m).
+- (void)recordSkipWithDescription:(NSString *)description
+               sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext;
 @end
 
 /// A test adopts the run it is performed against, which is what -performTest:
@@ -789,6 +803,46 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 /// so a report can show the class was there and had nothing in it -- but not
 /// one that claims to know the class.
 + (XCTestSuite *)emptyTestSuiteForTestCaseClass:(Class)testCaseClass;
+
+@end
+
+#pragma mark - XCTestCasePlaceholder
+
+/// A test that is known by name and could not be built, standing in for one
+/// that is.
+///
+/// This is what a selection asks for and a class cannot supply: an identifier
+/// with a class and a method, where the class has no invocation for that
+/// selector (or cannot run here at all). Rather than drop the test from the
+/// report -- which would make a selection look like it silently matched
+/// nothing -- the runner adds one of these, carrying the reason. It counts as a
+/// single test, reports its identifier, and records itself as skipped when it
+/// is performed, so a run over a selection sees exactly the tests the selection
+/// named and learns why the ones it could not run did not run.
+///
+/// Declared here rather than on <XCTest/XCTest.h> for the usual reason: the
+/// reference does not publish it, and it is not a class a test author names.
+@interface XCTestCasePlaceholder : XCTest
+
+- (instancetype)initWithIdentifier:(XCTTestIdentifier *)identifier
+                            reason:(NSString *)reason;
+
+/// Why the test could not be constructed, printed by -nameForLegacyLogging and
+/// recorded as the skip reason when the test is performed.
+@property (readonly, copy) NSString *reason;
+
+@end
+
+/// The run for an XCTestCasePlaceholder.
+///
+/// Identical to a plain XCTestRun but for one line: -initWithTest: insists the
+/// test is a placeholder, so a run that claims to be one cannot later be found
+/// holding anything else.
+@interface XCTestCasePlaceholderRun : XCTestRun
+
+/// The placeholder this run is for, which is what -test is and cannot be
+/// anything else by the check in -initWithTest:.
+@property (nullable, readonly, strong) XCTestCasePlaceholder *placeholder;
 
 @end
 

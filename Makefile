@@ -206,6 +206,7 @@ XCTESTCORE_PRIV_HDRS := src/xctestcore/XCTestCoreFoundationCompat.h \
 # that nothing here depends on a GNU extension.
 XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTest.o $(XCTESTCORE_OBJDIR)/XCTestSuite.o \
 	$(XCTESTCORE_OBJDIR)/XCTestCase.o $(XCTESTCORE_OBJDIR)/XCTestRun.o \
+	$(XCTESTCORE_OBJDIR)/XCTestCasePlaceholder.o \
 	$(XCTESTCORE_OBJDIR)/XCTestObservation.o $(XCTESTCORE_OBJDIR)/XCTestAssertions.o \
 	$(XCTESTCORE_OBJDIR)/XCActivityRecord.o \
 	$(XCTESTCORE_OBJDIR)/XCTActivityRecordStack.o \
@@ -303,6 +304,10 @@ $(XCTESTCORE_OBJDIR)/XCTestCase.o: src/xctestcore/XCTestCase.m $(XCTEST_FW_HEADE
 $(XCTESTCORE_OBJDIR)/XCTestRun.o: src/xctestcore/XCTestRun.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestRun.m
+
+$(XCTESTCORE_OBJDIR)/XCTestCasePlaceholder.o: src/xctestcore/XCTestCasePlaceholder.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h src/xctestcore/include/XCTestCore/XCTTestSelection.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTestCasePlaceholder.m
 
 $(XCTESTCORE_OBJDIR)/XCTestObservation.o: src/xctestcore/XCTestObservation.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestFoundationCompat.h src/xctestcore/XCTestObservationInternal.h
 	@mkdir -p $(XCTESTCORE_OBJDIR)

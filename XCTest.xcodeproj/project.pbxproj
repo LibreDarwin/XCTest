@@ -14,6 +14,7 @@
 		1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000101 /* XCTestSuite.m */; };
 		1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000102 /* XCTestCase.m */; };
 		1A2B3C4E0000000000000123 /* XCTestRun.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000103 /* XCTestRun.m */; };
+		1A2B3C4E0000000000000135 /* XCTestCasePlaceholder.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000134 /* XCTestCasePlaceholder.m */; };
 		1A2B3C4E00000000000000E6 /* XCActivityRecord.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C6 /* XCActivityRecord.m */; };
 		1ACFB3A523F70A0000123458 /* XCTActivityRecordStack.m in Sources */ = {isa = PBXBuildFile; fileRef = 1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m */; };
 		1A2B3C4E0000000000000124 /* XCTestObservation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000104 /* XCTestObservation.m */; };
@@ -107,6 +108,7 @@
 		1A2B3C4E0000000000000101 /* XCTestSuite.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSuite.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000102 /* XCTestCase.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestCase.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000103 /* XCTestRun.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestRun.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000134 /* XCTestCasePlaceholder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestCasePlaceholder.m; sourceTree = "<group>"; };
 		1A2B3C4E00000000000000C6 /* XCActivityRecord.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCActivityRecord.m; sourceTree = "<group>"; };
 		1ACFB3A123F70A0000123458 /* XCTActivityRecordStack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XCTActivityRecordStack.h; sourceTree = "<group>"; };
 		1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTActivityRecordStack.m; sourceTree = "<group>"; };
@@ -321,6 +323,7 @@
 				1A2B3C4E0000000000000101 /* XCTestSuite.m */,
 				1A2B3C4E0000000000000102 /* XCTestCase.m */,
 				1A2B3C4E0000000000000103 /* XCTestRun.m */,
+				1A2B3C4E0000000000000134 /* XCTestCasePlaceholder.m */,
 				1A2B3C4E00000000000000C6 /* XCActivityRecord.m */,
 				1ACFB3A123F70A0000123458 /* XCTActivityRecordStack.h */,
 				1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m */,
@@ -723,6 +726,7 @@
 				1A2B3C4E0000000000000121 /* XCTestSuite.m in Sources */,
 				1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */,
 				1A2B3C4E0000000000000123 /* XCTestRun.m in Sources */,
+				1A2B3C4E0000000000000135 /* XCTestCasePlaceholder.m in Sources */,
 				1A2B3C4E00000000000000E6 /* XCActivityRecord.m in Sources */,
 				1ACFB3A523F70A0000123458 /* XCTActivityRecordStack.m in Sources */,
 				1ACFB3A223F70A000012345A /* XCTContext.m in Sources */,

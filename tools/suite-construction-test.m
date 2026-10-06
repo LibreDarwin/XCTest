@@ -27,6 +27,10 @@
 //     by: through the signature suffixes the harness appends to a method, with
 //     the class's own rename hooks honoured, and with no answer at all when the
 //     class has no such method.
+//   - Placeholders. A selection can name a test the class cannot supply, and the
+//     tree that comes back has to contain it anyway -- named after the test it
+//     stands for, counted as one test, and skipped with a reason when performed
+//     -- rather than quietly missing the ones that failed to construct.
 //
 // It links the installed framework rather than the object files, so it also
 // covers installation and the private declarations in XCTestInternal.h, which is
@@ -1621,6 +1625,150 @@ static void testIdentifiersFromNames(void)
 }
 @end
 
+#pragma mark - Placeholder
+
+static void testPlaceholder(void)
+{
+    printf("placeholder\n");
+
+    NSString *reason = @"Test is unavailable since it has no invocation";
+
+    // The Objective-C spelling: -displayName reads it as a source expression,
+    // which is the form a report prints and the form the legacy name keeps.
+    XCTTestIdentifier *identifier =
+        [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testFoo"];
+    XCTestCasePlaceholder *placeholder =
+        [[XCTestCasePlaceholder alloc] initWithIdentifier:identifier reason:reason];
+    ok("the reason survives", [placeholder.reason isEqualToString:reason], nil);
+    ok("the identifier survives", [placeholder._xctTestIdentifier isEqual:identifier], nil);
+    ok("a placeholder counts as one test", placeholder.testCaseCount == 1, nil);
+    ok("a placeholder names the test it stands for",
+       [placeholder.name isEqualToString:@"Unavailable test: -[MyTests testFoo]"], nil);
+    ok("the legacy name is the test without the wrapper",
+       [placeholder.nameForLegacyLogging isEqualToString:@"-[MyTests testFoo]"],
+       placeholder.nameForLegacyLogging);
+    ok("a placeholder runs as a placeholder run",
+       placeholder.testRunClass == [XCTestCasePlaceholderRun class], nil);
+
+    // The Swift spelling reads differently under the two names, which is the
+    // only place they part: the general name keeps the Swift reading, and the
+    // legacy one is what an Objective-C runner would have written.
+    XCTTestIdentifier *swiftIdentifier =
+        [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyModule.MyTests/testFoo"];
+    XCTestCasePlaceholder *swiftPlaceholder =
+        [[XCTestCasePlaceholder alloc] initWithIdentifier:swiftIdentifier reason:reason];
+    ok("a Swift identifier reads as Swift in -name",
+       [swiftPlaceholder.name isEqualToString:@"Unavailable test: MyTests.testFoo()"],
+       swiftPlaceholder.name);
+    ok("and as Objective-C in the legacy name",
+       [swiftPlaceholder.nameForLegacyLogging isEqualToString:@"-[MyTests testFoo]"],
+       swiftPlaceholder.nameForLegacyLogging);
+
+    // MARK: Identity and ordering
+
+    XCTestCasePlaceholder *same = [[XCTestCasePlaceholder alloc]
+        initWithIdentifier:[[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testFoo"]
+                    reason:@"a different reason for the same test"];
+    ok("placeholders with one identifier are equal", [placeholder isEqual:same], nil);
+
+    XCTestCasePlaceholder *different = [[XCTestCasePlaceholder alloc]
+        initWithIdentifier:[[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testBar"]
+                    reason:reason];
+    ok("placeholders with different identifiers differ", ![placeholder isEqual:different], nil);
+
+    XCTestSuite *real = [XCTestSuite testSuiteWithName:@"NotAPlaceholder"];
+    ok("a test that ran is not a placeholder", ![placeholder isEqual:real], nil);
+
+    ok("a placeholder sorts before a test that ran",
+       [placeholder defaultExecutionOrderCompare:real] == NSOrderedAscending, nil);
+
+    XCTestCasePlaceholder *apple = [[XCTestCasePlaceholder alloc]
+        initWithIdentifier:[[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testApple"]
+                    reason:reason];
+    XCTestCasePlaceholder *zebra = [[XCTestCasePlaceholder alloc]
+        initWithIdentifier:[[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testZebra"]
+                    reason:reason];
+    ok("placeholders order by method name",
+       [apple defaultExecutionOrderCompare:zebra] == NSOrderedAscending, nil);
+
+    // MARK: The run
+
+    XCTestCasePlaceholderRun *run = [[XCTestCasePlaceholderRun alloc] initWithTest:placeholder];
+    ok("a placeholder run reports its placeholder", run.placeholder == placeholder, nil);
+    ok("a placeholder run counts its one test", run.testCaseCount == 1, nil);
+
+    [placeholder performTest:run];
+    ok("performed, the placeholder adopts the run", placeholder.testRun == run, nil);
+    ok("performed, the placeholder is skipped", run.hasBeenSkipped, nil);
+    ok("a placeholder's skip is not counted", run.skipCount == 0, nil);
+
+    // The reference's three precondition checks, each raised rather than
+    // swallowed: a skip asked of a run in the wrong state is a caller bug, and
+    // dropping it would leave the run's state unexplained.
+    XCTSourceCodeContext *skipContext =
+        [[XCTSourceCodeContext alloc] initWithCallStack:@[] location:nil];
+
+    XCTestCasePlaceholderRun *neverStarted =
+        [[XCTestCasePlaceholderRun alloc] initWithTest:placeholder];
+    BOOL raised = NO;
+    @try {
+        [neverStarted recordSkipWithDescription:reason sourceCodeContext:skipContext];
+    } @catch (NSException *exception) {
+        raised = YES;
+        ok("a skip before start names the run",
+           [exception.reason rangeOfString:@"has not yet been started"].location != NSNotFound,
+           exception.reason);
+    }
+    ok("a skip before start raises", raised, nil);
+
+    XCTestCasePlaceholderRun *stopped =
+        [[XCTestCasePlaceholderRun alloc] initWithTest:placeholder];
+    [stopped start];
+    [stopped recordSkipWithDescription:reason sourceCodeContext:skipContext];
+    ok("a skip while running marks the run", stopped.hasBeenSkipped, nil);
+    ok("a skip while running is not counted", stopped.skipCount == 0, nil);
+    raised = NO;
+    @try {
+        [stopped recordSkipWithDescription:reason sourceCodeContext:skipContext];
+    } @catch (NSException *exception) {
+        raised = YES;
+        ok("a second skip says so",
+           [exception.reason rangeOfString:@"has already been skipped"].location != NSNotFound,
+           exception.reason);
+    }
+    ok("a second skip raises", raised, nil);
+
+    // A run that was never skipped but is over: the two conditions are
+    // distinct checks, so they are checked on separate runs rather than one
+    // that has already been disqualified by the earlier ones.
+    XCTestCasePlaceholderRun *finished =
+        [[XCTestCasePlaceholderRun alloc] initWithTest:placeholder];
+    [finished start];
+    [finished stop];
+    raised = NO;
+    @try {
+        [finished recordSkipWithDescription:reason sourceCodeContext:skipContext];
+    } @catch (NSException *exception) {
+        raised = YES;
+        ok("a skip after stop says so",
+           [exception.reason rangeOfString:@"has already been stopped"].location != NSNotFound,
+           exception.reason);
+    }
+    ok("a skip after stop raises", raised, nil);
+
+    raised = NO;
+    @try {
+        (void)[[XCTestCasePlaceholderRun alloc] initWithTest:real];
+    } @catch (NSException *exception) {
+        raised = YES;
+        ok("the run refuses a real test by name",
+           [exception.reason rangeOfString:@"Invalid parameter not satisfying"].location
+               != NSNotFound,
+           exception.reason);
+    }
+    ok("a placeholder run refuses anything but a placeholder", raised, nil);
+}
+
 #pragma mark - Class from string
 
 static void testClassFromString(void)
@@ -2702,6 +2850,7 @@ int main(void)
     testAllMethodInvocationDescriptors();
     testTestInvocationDescriptors();
     testIdentifiersFromNames();
+    testPlaceholder();
     testClassFromString();
     testEmptySuite();
     testEmptySuiteInclusion();

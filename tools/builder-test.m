@@ -196,6 +196,28 @@ int main(void)
             Check(swiftTest.isSwiftMethod, @"the fixture is read as a Swift method");
             Check(swiftTest.swiftMethodCounterpart == nil, @"a Swift method has no second Swift reading");
         }
+        {
+            // The mirror image: the Swift reading of the same test, undone.
+            // Same components, same arguments, only the Swift option bit
+            // cleared -- which is what changes the display name from
+            // `MyTests.testFoo()` to `-[MyTests testFoo]`, the spelling an
+            // Objective-C runner writes.
+            XCTTestIdentifier *swift = [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyModule.MyTests/testFoo"];
+            Check(swift.isSwiftMethod, @"the fixture is read as a Swift method");
+            XCTTestIdentifier *counterpart = swift.objcMethodCounterpart;
+            Check(counterpart != nil, @"a Swift method has an Objective-C counterpart");
+            Check(!counterpart.isSwiftMethod, @"the counterpart drops the Swift reading");
+            Check([counterpart isEqual:[[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testFoo"]],
+                  @"the counterpart names the same test the Objective-C spelling does");
+        }
+        {
+            XCTTestIdentifier *objc = [[XCTTestIdentifier alloc] initWithStringRepresentation:@"MyTests/testFoo"];
+            Check(objc.objcMethodCounterpart == nil, @"an Objective-C method has no Objective-C counterpart");
+        }
+        {
+            XCTTestIdentifier *suite = [[XCTTestIdentifier alloc] initWithSwiftTestingStringRepresentation:@"MySuite"];
+            Check(suite.objcMethodCounterpart == nil, @"a suite has no Objective-C counterpart");
+        }
 
         // MARK: Accumulation
 

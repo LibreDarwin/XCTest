@@ -871,6 +871,23 @@ static NSString *const XCTTestIdentifierDeprecatedKey = @"deprecated";
                                                  options:self.options | XCTTestIdentifierOptionSwiftMethod];
 }
 
+- (XCTTestIdentifier *)objcMethodCounterpart
+{
+    if (!self.usesClassAndMethodSemantics || self.componentCount != 2 || !self.isSwiftMethod) {
+        // The mirror image of the above: a suite is not a method under another
+        // spelling, and an identifier already read as Objective-C already has
+        // the Objective-C spelling.
+        return nil;
+    }
+    // The same components and the same arguments, read as Objective-C. Only the
+    // Swift-method option bit clears, so the identifier names the same test;
+    // what differs is that it now matches the spelling an Objective-C runner
+    // writes.
+    return [[XCTTestIdentifier alloc] initWithComponents:self.components
+                                             argumentIDs:self.argumentIDs
+                                                 options:self.options & ~XCTTestIdentifierOptionSwiftMethod];
+}
+
 @end
 
 #pragma mark - XCTTestIdentifierPrivateCore

@@ -18,6 +18,20 @@
 #import "XCTestFoundationCompat.h"
 #import "XCTestInternal.h"
 
+/// Raises one of the reference's run precondition assertions.
+///
+/// The reference raises these through NSAssertionHandler; this port has no
+/// NSAssertionHandler to raise through -- the reduced <Foundation/NSException.h>
+/// omits it -- so the same text is raised as an exception instead, exactly as
+/// XCTestConfigurationLoader.m does for its assertions. The name and the reason
+/// are what a caller can observe.
+static void _XCTRaiseAssertionFailure(NSString *description)
+{
+    [[NSException exceptionWithName:NSInternalInconsistencyException
+                              reason:description
+                            userInfo:nil] raise];
+}
+
 @implementation XCTestRun {
     XCTest *_test;
     NSDate *_startDate;
@@ -284,6 +298,39 @@
                           attachments:@[]
                              severity:XCTIssueSeverityError];
     [self recordIssue:issue];
+}
+
+- (void)recordSkipWithDescription:(NSString *)description
+               sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext
+{
+    // Both arguments are taken and neither is read: the reference sets
+    // -hasBeenSkipped from this method and nothing else, and it does not count
+    // the skip. That is the difference from -recordIssue: with a skipped-test
+    // issue, which increments -skipCount; a caller here has no issue to report,
+    // only a fact to record. The precondition checks below are the reference's,
+    // and the wording is copied from it.
+    (void)description;
+    (void)sourceCodeContext;
+
+    if (!_hasStarted) {
+        _XCTRaiseAssertionFailure([NSString stringWithFormat:
+            @"Invalid attempt to record a skip for a test run that has not yet been started: %@",
+            self]);
+        return;
+    }
+    if (_hasBeenSkipped) {
+        _XCTRaiseAssertionFailure([NSString stringWithFormat:
+            @"Invalid attempt to record a skip for a test run that has already been skipped: %@",
+            self]);
+        return;
+    }
+    if (_hasStopped) {
+        _XCTRaiseAssertionFailure([NSString stringWithFormat:
+            @"Invalid attempt to record a skip for a test run that has already been stopped: %@",
+            self]);
+        return;
+    }
+    [self setHasBeenSkipped:YES];
 }
 
 #pragma mark - Observation

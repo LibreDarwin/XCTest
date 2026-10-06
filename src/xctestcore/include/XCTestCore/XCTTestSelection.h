@@ -26,8 +26,8 @@
 //   -XCTTagSelection initWithDictionary:     the plist form, which the IDE
 //                                            writes and this port never reads.
 //   XCTTestIdentifierSetBuilder -builder     likewise.
-//   -XCTTestIdentifier objcMethodCounterpart,
-//   legacyEncodingCounterpart, legacyClassAndMethodStringRepresentation,
+//   -XCTTestIdentifier legacyEncodingCounterpart,
+//   legacyClassAndMethodStringRepresentation,
 //   identifierWithAncestorSuiteContext, stagedIdentifier, and the nine
 //     private _XCTTestIdentifier_* subclasses
 //                                            the encoding rewrite that carries
@@ -246,6 +246,11 @@ typedef NS_OPTIONS(NSUInteger, XCTTestIdentifierOptions) {
 /// such distinct spelling: a suite is not a method, and an Objective-C method
 /// gains the counterpart that carries the Swift reading.
 - (nullable XCTTestIdentifier *)swiftMethodCounterpart;
+
+/// The same test read as Objective-C would name it, or nil when there is no
+/// such distinct spelling: a suite is not a method, and an identifier that is
+/// not a Swift method already carries the Objective-C reading.
+- (nullable XCTTestIdentifier *)objcMethodCounterpart;
 
 @end
 
