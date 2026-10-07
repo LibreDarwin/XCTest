@@ -267,6 +267,55 @@ static void ok(const char *name, BOOL passed, NSString *detail)
 }
 @end
 
+// Supplies a real invocation list, so the construct entry point's middle leg
+// has something to resolve and then filter. The list is deliberately not in
+// method order, so a resolution that respects it is distinguishable from one
+// that re-sorts. (Forward-declared: the helper lives with the identifier tests.)
+static NSInvocation *identifierInvocation(Class cls, SEL selector);
+
+@interface XCTSuiteConstructionInvocationsWithTestsFixture : XCTestCase
+- (void)testFirst;
+- (void)testSecond;
+@end
+@implementation XCTSuiteConstructionInvocationsWithTestsFixture
++ (NSArray<NSInvocation *> *)testInvocations
+{
+    return @[ identifierInvocation([self class], @selector(testSecond)),
+              identifierInvocation([self class], @selector(testFirst)) ];
+}
+- (void)testFirst
+{
+}
+- (void)testSecond
+{
+}
+@end
+
+// Carries its own test methods and a +defaultTestSuite that prebuilds cases for
+// them, so the construct entry point's first leg has a populated suite to
+// prune down to a selection.
+@interface XCTSuiteConstructionDefaultWithTestsFixture : XCTestCase
+- (void)testAlpha;
+- (void)testBeta;
+@end
+@implementation XCTSuiteConstructionDefaultWithTestsFixture
++ (XCTestSuite *)defaultTestSuite
+{
+    XCTestSuite *suite = [XCTestSuite testSuiteWithName:@"ConstructionDefaultWithTests"];
+    [suite addTest:[self testCaseWithSelector:@selector(testAlpha)
+                 testRunConfiguration:@{}]];
+    [suite addTest:[self testCaseWithSelector:@selector(testBeta)
+                 testRunConfiguration:@{}]];
+    return suite;
+}
+- (void)testAlpha
+{
+}
+- (void)testBeta
+{
+}
+@end
+
 // Answers the availability hook with no. The reference reaches that answer by
 // comparing a declared minimum OS version against the running one; a class that
 // wants to be unavailable says so here instead.
@@ -2064,6 +2113,150 @@ static void testResolvedSuite(void)
     }
 }
 
+static XCTTestIdentifier *identifierFromString(NSString *string)
+{
+    return [[XCTTestIdentifier alloc] initWithStringRepresentation:string];
+}
+
+static void testSelectorConstruction(void)
+{
+    printf("selector construction\n");
+
+    // The fall-through leg resolves a plain class's selected tests from its
+    // selectors: one case per requested identifier, each built under the
+    // class's single empty variation. Picking one of the two methods keeps
+    // exactly it.
+    XCTTestIdentifier *zebra =
+        identifierFromString(@"XCTSuiteConstructionCaseFixture/testZebra");
+    XCTTestIdentifierSet *oneSelection =
+        [[XCTTestIdentifierSet alloc] initWithTestIdentifier:zebra];
+    XCTestSuite *selected =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:[XCTSuiteConstructionCaseFixture class]
+                                              testIdentifiersToRun:oneSelection];
+    ok("a selected identifier resolves to a case suite",
+       [selected isKindOfClass:[XCTestCaseSuite class]], nil);
+    ok("one selected identifier keeps exactly its test", selected.tests.count == 1,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)selected.tests.count]);
+    if (selected.tests.count == 1) {
+        XCTest *onlyTest = selected.tests[0];
+        ok("the kept test is the selected method",
+           [[[onlyTest _xctTestIdentifier] identifierString]
+               isEqualToString:@"XCTSuiteConstructionCaseFixture/testZebra"],
+           [[onlyTest _xctTestIdentifier] identifierString]);
+        ok("the kept test is a runnable case",
+           [onlyTest isKindOfClass:[XCTestCase class]], nil);
+        ok("the kept case was built under the empty configuration",
+           [((XCTestCase *)onlyTest)._testRunConfiguration isEqualToDictionary:@{}], nil);
+    }
+
+    // Both identifiers resolve to both tests, and neither is lost or dropped.
+    XCTTestIdentifier *apple =
+        identifierFromString(@"XCTSuiteConstructionCaseFixture/testapple");
+    XCTTestIdentifierSet *bothSelections =
+        [[XCTTestIdentifierSet alloc] initWithArray:@[ zebra, apple ]];
+    XCTestSuite *both =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:[XCTSuiteConstructionCaseFixture class]
+                                              testIdentifiersToRun:bothSelections];
+    ok("both selected identifiers resolve to both tests", both.tests.count == 2,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)both.tests.count]);
+    if (both.tests.count == 2) {
+        NSSet *names = [NSSet setWithArray:@[
+            [[[both.tests[0] _xctTestIdentifier] identifierString]
+                componentsSeparatedByString:@"/"].lastObject,
+            [[[both.tests[1] _xctTestIdentifier] identifierString]
+                componentsSeparatedByString:@"/"].lastObject,
+        ]];
+        ok("the selected tests are the two requested methods",
+           [names isEqualToSet:[NSSet setWithArray:@[ @"testapple", @"testZebra" ]]], nil);
+    }
+
+    // An identifier that resolves to no method contributes nothing.
+    XCTTestIdentifier *unknown =
+        identifierFromString(@"XCTSuiteConstructionCaseFixture/testNope");
+    XCTTestIdentifierSet *unknownSelection =
+        [[XCTTestIdentifierSet alloc] initWithTestIdentifier:unknown];
+    XCTestSuite *unknownSuite =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:[XCTSuiteConstructionCaseFixture class]
+                                              testIdentifiersToRun:unknownSelection];
+    ok("an identifier that names no method keeps it out of the suite",
+       unknownSuite.tests.count == 0,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)unknownSuite.tests.count]);
+
+    // An empty selection builds an empty suite.
+    XCTTestIdentifierSet *emptySelection = [[XCTTestIdentifierSet alloc] init];
+    XCTestSuite *emptySuite =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:[XCTSuiteConstructionCaseFixture class]
+                                              testIdentifiersToRun:emptySelection];
+    ok("an empty selection builds an empty suite", emptySuite.tests.count == 0,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)emptySuite.tests.count]);
+
+    // The first leg hands a class that customises +defaultTestSuite its own
+    // suite, pruned to the selection.
+    XCTTestIdentifier *beta =
+        identifierFromString(@"XCTSuiteConstructionDefaultWithTestsFixture/testBeta");
+    XCTTestIdentifierSet *betaSelection =
+        [[XCTTestIdentifierSet alloc] initWithTestIdentifier:beta];
+    XCTestSuite *pruned =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:
+            [XCTSuiteConstructionDefaultWithTestsFixture class]
+                                     testIdentifiersToRun:betaSelection];
+    ok("the custom default suite is returned from the first leg",
+       [pruned.name isEqualToString:@"ConstructionDefaultWithTests"], pruned.name);
+    ok("pruning keeps only the selected test", pruned.tests.count == 1,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)pruned.tests.count]);
+    if (pruned.tests.count == 1) {
+ok("the pruned suite holds the selected method",
+           [[[pruned.tests[0] _xctTestIdentifier] identifierString]
+               isEqualToString:@"XCTSuiteConstructionDefaultWithTestsFixture/testBeta"],
+           [[pruned.tests[0] _xctTestIdentifier] identifierString]);
+     }
+
+    // The same leg answers nil when the selection matches nothing in the
+    // class's own suite, rather than a suite that would claim there was
+    // something to run.
+    XCTTestIdentifier *outsider =
+        identifierFromString(@"XCTSuiteConstructionDefaultWithTestsFixture/testOther");
+    XCTTestIdentifierSet *outsiderSelection =
+        [[XCTTestIdentifierSet alloc] initWithTestIdentifier:outsider];
+    XCTestSuite *noMatch =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:
+            [XCTSuiteConstructionDefaultWithTestsFixture class]
+                                     testIdentifiersToRun:outsiderSelection];
+    ok("a selection that matches nothing in the class's own suite answers nil",
+       noMatch == nil, nil);
+
+    // The middle leg resolves a class that customises +testInvocations from
+    // that list and filters it down to the selection.
+    XCTTestIdentifier *first =
+        identifierFromString(@"XCTSuiteConstructionInvocationsWithTestsFixture/testFirst");
+    XCTTestIdentifierSet *firstSelection =
+        [[XCTTestIdentifierSet alloc] initWithTestIdentifier:first];
+    XCTestSuite *fromInvocations =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:
+            [XCTSuiteConstructionInvocationsWithTestsFixture class]
+                                     testIdentifiersToRun:firstSelection];
+    ok("the invocations leg resolves from the class's own list",
+       fromInvocations.tests.count == 1,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)fromInvocations.tests.count]);
+    if (fromInvocations.tests.count == 1) {
+ok("the invocation leg filtered to the selected method",
+           [[[fromInvocations.tests[0] _xctTestIdentifier] identifierString]
+               isEqualToString:
+                   @"XCTSuiteConstructionInvocationsWithTestsFixture/testFirst"],
+           [[fromInvocations.tests[0] _xctTestIdentifier] identifierString]);
+    }
+
+    // An empty selection sent down the same leg keeps nothing of the class's
+    // invocation list.
+    XCTestSuite *invocationsEmpty =
+        [XCTestSuite _constructTestSuiteForTestCaseClass:
+            [XCTSuiteConstructionInvocationsWithTestsFixture class]
+                                     testIdentifiersToRun:emptySelection];
+    ok("the invocations leg with an empty selection keeps nothing",
+       invocationsEmpty.tests.count == 0,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)invocationsEmpty.tests.count]);
+}
+
 static void testActivityObservation(void)
 {
     // Activity start and finish are reported through a private protocol layered
@@ -3133,6 +3326,7 @@ int main(void)
     testClassFromString();
     testEmptySuite();
     testResolvedSuite();
+    testSelectorConstruction();
     testEmptySuiteInclusion();
     testCaseSuiteLifecycle();
     testChildContext();

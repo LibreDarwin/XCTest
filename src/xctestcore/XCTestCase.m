@@ -172,6 +172,31 @@ static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selec
     return [self testCaseWithInvocation:invocation];
 }
 
++ (instancetype)testCaseWithSelector:(SEL)selector
+                 testRunConfiguration:(NSDictionary *)testRunConfiguration
+{
+    return [self testCaseWithSelector:selector identifier:nil testRunConfiguration:testRunConfiguration];
+}
+
++ (instancetype)testCaseWithSelector:(SEL)selector
+                          identifier:(XCTTestIdentifier *)identifier
+                  testRunConfiguration:(NSDictionary *)testRunConfiguration
+{
+    // The base factory is what validates the selector; an unknown one answers
+    // nil and stays absent, which is how the selector resolution path leaves an
+    // identifier that names no test out of its suite.
+    XCTestCase *testCase = [self testCaseWithSelector:selector];
+    if ([testCase isKindOfClass:[XCTestCase class]]) {
+        if (testRunConfiguration != nil) {
+            testCase->_testRunConfiguration = [testRunConfiguration copy];
+        }
+        if (identifier != nil) {
+            testCase->_identifier = identifier;
+        }
+    }
+    return testCase;
+}
+
 - (instancetype)initWithSelector:(SEL)selector
 {
     XCTestCase *testCase = [self.class testCaseWithSelector:selector];

@@ -438,6 +438,104 @@ static NSArray<NSDictionary *> *XCTestDefaultRunConfigurations(void)
                             identifier:identifier];
 }
 
+#pragma mark - Selection construction
+
++ (XCTestSuite *)testSuiteForTestWithIdentifier:(XCTTestIdentifier *)identifier
+                                   inTestClass:(Class)testCaseClass
+                                     variations:(NSArray<NSDictionary *> *)variations
+{
+    XCTestSuite *suite = [self emptyTestSuiteForTestCaseClass:testCaseClass];
+    BOOL classAvailable = _XCTTestCaseClassIsAvailable(testCaseClass);
+    BOOL classAnswersSelectorFactory =
+        [testCaseClass respondsToSelector:@selector(testCaseWithSelector:testRunConfiguration:)];
+    for (NSDictionary *variation in variations) {
+        // Only the last component names the test here: a selection addresses a
+        // method, and whichever arguments a parameterized test carries live
+        // above that, in the components the case itself knows how to read.
+        NSString *lastComponent = identifier.lastComponent;
+        if (classAvailable && classAnswersSelectorFactory) {
+            // Runnable and built by selector: one real case under each
+            // variation. An identifier that names no method answers nil and
+            // stays out of the suite.
+            XCTestCase *testCase =
+                [testCaseClass testCaseWithSelector:NSSelectorFromString(lastComponent)
+                                testRunConfiguration:variation];
+            if (testCase != nil) {
+                [suite addTest:testCase];
+            }
+        } else if ([testCaseClass respondsToSelector:@selector(_identifierForSelectorString:)]) {
+            // Not runnable here, or the class predates the selector factory,
+            // but the test is still nameable: a placeholder carries the reason
+            // so the report still shows it was asked for.
+            XCTTestIdentifier *unavailableIdentifier =
+                [testCaseClass _identifierForSelectorString:lastComponent];
+            if (unavailableIdentifier != nil) {
+                [suite addTest:[[XCTestCasePlaceholder alloc] initWithIdentifier:unavailableIdentifier
+                          reason:@"Test is unavailable since it uses features not supported by this OS version"]];
+            }
+        }
+    }
+    return suite;
+}
+
++ (XCTestSuite *)_resolveTestSuiteBySelectorsInClass:(XCTTestIdentifierSet *)identifiers
+                                    inTestCaseClass:(Class)testCaseClass
+{
+    XCTestSuite *suite = [self emptyTestSuiteForTestCaseClass:testCaseClass];
+    // The class's own variations, or the single empty configuration when it
+    // contributes none -- the reference's fall-back from an empty answer.
+    NSArray<NSDictionary *> *variations = nil;
+    if ([testCaseClass respondsToSelector:@selector(_variationOptions)]) {
+        variations = [testCaseClass _variationOptions].variations;
+    }
+    if (variations.count == 0) {
+        variations = @[ @{} ];
+    }
+    // One flat suite: each identifier contributes a sub-suite holding its
+    // cases, and those tests are re-homed here. An identifier that resolves to
+    // nothing contributes nothing.
+    for (XCTTestIdentifier *identifier in identifiers.sortedIdentifiers) {
+        XCTestSuite *subsuite = [self testSuiteForTestWithIdentifier:identifier
+                                                        inTestClass:testCaseClass
+                                                          variations:variations];
+        for (XCTest *test in subsuite.tests) {
+            [suite addTest:test];
+        }
+    }
+    return suite;
+}
+
++ (XCTestSuite *)_constructTestSuiteForTestCaseClass:(Class)testCaseClass
+                                         testIdentifiersToRun:(XCTTestIdentifierSet *)identifiers
+{
+    if ([testCaseClass respondsToSelector:@selector(overridesDefaultTestSuite)] &&
+        [testCaseClass overridesDefaultTestSuite]) {
+        // The class describes itself: take its suite as-is and keep only what
+        // the selection asked for. A selection may name the Swift spelling of
+        // a method while the set holds the Objective-C one (and vice versa),
+        // so the counterpart-completed set is what the pruning checks against.
+        XCTestSuite *suite = [testCaseClass defaultTestSuite];
+        XCTTestIdentifierSet *requestedIdentifiers = [identifiers setByAddingSwiftCounterparts];
+        [suite _removeTestsWithoutIdentifierInSet:requestedIdentifiers];
+        // A selection that matches nothing in the class's own suite means there
+        // is nothing to run here, and the reference answers nil where an empty
+        // suite would be a claim that there was.
+        if (suite.tests.count == 0) {
+            return nil;
+        }
+        return suite;
+    }
+    if ([testCaseClass respondsToSelector:@selector(overridesTestInvocations)] &&
+        [testCaseClass overridesTestInvocations]) {
+        // The class supplies an invocation list of its own: resolve those, then
+        // keep only what the selection asked for, with the same counterpart
+        // completion applied to the requested set.
+        return [self _resolveTestSuiteByTestInvocationsInClass:testCaseClass
+                                    filteringToTestIdentifiersToRun:[identifiers setByAddingSwiftCounterparts]];
+    }
+    return [self _resolveTestSuiteBySelectorsInClass:identifiers inTestCaseClass:testCaseClass];
+}
+
 #pragma mark - Default suite
 
 // The header declares `defaultTestSuite` as a class property, which synthesises

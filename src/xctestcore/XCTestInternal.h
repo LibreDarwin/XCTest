@@ -752,6 +752,20 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 /// inputs when the class contributes nothing.
 + (NSDictionary *)testRunConfigurationInputs;
 
+/// Builds a case for `selector` running under `testRunConfiguration`. The
+/// reference's three-argument spelling of the selector factory; a thin
+/// delegation to the four-argument form with no identifier, which is what the
+/// selector-resolution path uses (the identifier is computed on demand from
+/// the case rather than supplied alongside it).
++ (instancetype)testCaseWithSelector:(SEL)selector
+                 testRunConfiguration:(NSDictionary *)testRunConfiguration;
+
+/// The four-argument spelling: builds a case for `selector` and records
+/// `identifier` and the configuration on it.
++ (instancetype)testCaseWithSelector:(SEL)selector
+                          identifier:(nullable XCTTestIdentifier *)identifier
+                  testRunConfiguration:(NSDictionary *)testRunConfiguration;
+
 /// Declared and never implemented here on purpose; see the category comment.
 + (NSDictionary *)testRunConfigurationInputsForUITesting;
 
@@ -891,6 +905,38 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 /// and is carried for the reference's sake.
 + (XCTestSuite *)_resolveTestSuiteByTestInvocationsInClass:(Class)testCaseClass
                                filteringToTestIdentifiersToRun:(nullable XCTTestIdentifierSet *)filter;
+
+/// Builds a suite for `testCaseClass` containing exactly the identifiers in
+/// `identifiers`, resolved from the class's own tests.
+///
+/// Three dispatch legs, in order. A class that customises +defaultTestSuite
+/// gets that suite pruned to the requested identifiers; one that customises
+/// +testInvocations gets its tests resolved from there and filtered; everything
+/// else -- the common case of a plain XCTestCase subclass -- is resolved from
+/// its selectors. The entry point a run calls once per class it was asked for.
++ (XCTestSuite *)_constructTestSuiteForTestCaseClass:(Class)testCaseClass
+                                         testIdentifiersToRun:(XCTTestIdentifierSet *)identifiers;
+
+/// Resolves `testCaseClass`'s selected tests from its method selectors.
+///
+/// The fall-through leg, reached when a class neither customises its default
+/// suite nor its test invocations, and the path a selection against a plain
+/// class takes. One sub-suite is built per requested identifier -- a case under
+/// every variation the class contributes when it can run here, a placeholder
+/// when it cannot -- and the sub-suites' contents are flattened into the
+/// class's suite.
++ (XCTestSuite *)_resolveTestSuiteBySelectorsInClass:(XCTTestIdentifierSet *)identifiers
+                                    inTestCaseClass:(Class)testCaseClass;
+
+/// Builds the one-identifier piece of selector resolution: a sub-suite holding
+/// that test's cases.
+///
+/// A case under every variation when the class can run here and answers the
+/// selector factory; a placeholder built from the identifier's last component
+/// otherwise, so a test that cannot be constructed is still named in a report.
++ (XCTestSuite *)testSuiteForTestWithIdentifier:(XCTTestIdentifier *)identifier
+                                   inTestClass:(Class)testCaseClass
+                                     variations:(NSArray<NSDictionary *> *)variations;
 
 @end
 
