@@ -31,6 +31,12 @@
 //     tree that comes back has to contain it anyway -- named after the test it
 //     stands for, counted as one test, and skipped with a reason when performed
 //     -- rather than quietly missing the ones that failed to construct.
+//   - Resolved suites. +testSuiteForTestCaseClass: builds a class's suite from
+//     its discovered descriptors: one case per test, each built under a
+//     recorded run configuration (the empty one when the class contributes no
+//     variations), a placeholder standing in for a test whose class cannot run
+//     here, and the whole list ordered the way the descriptor consumer orders
+//     it -- without regard to case.
 //
 // It links the installed framework rather than the object files, so it also
 // covers installation and the private declarations in XCTestInternal.h, which is
@@ -305,6 +311,23 @@ static NSUInteger XCTSuiteConstructionTearDownCount = 0;
 + (BOOL)_isAvailable
 {
     return NO;
+}
+@end
+
+// Unavailable *and* carrying a test method. The fixture above has no tests, so
+// its suite exercises only the empty-suite path; this one is what reaches the
+// descriptor consumer's class-unavailable placeholder leg, where a discovered
+// test cannot run because its class cannot run here.
+@interface XCTSuiteConstructionUnavailableWithTestsFixture : XCTestCase
+- (void)testUnavailable;
+@end
+@implementation XCTSuiteConstructionUnavailableWithTestsFixture
++ (BOOL)_isAvailable
+{
+    return NO;
+}
+- (void)testUnavailable
+{
 }
 @end
 
@@ -1920,6 +1943,127 @@ static void testEmptySuite(void)
        [unaddressed.name isEqualToString:@"Loose"], unaddressed.name);
 }
 
+#pragma mark - Resolved suite
+
+static void testResolvedSuite(void)
+{
+    printf("resolved suite\n");
+
+    // A test class contributes no inputs in this system, so its variation
+    // options are the default: a set whose inputs are empty and which yields no
+    // variations. The consumer substitutes a single empty configuration on that
+    // answer, which is the reference's own fallback.
+    XCTVariationOptions *defaults = [XCTVariationOptions defaultVariationOptions];
+    ok("the default options have empty inputs", defaults.inputs.count == 0, nil);
+    ok("the default options contribute no variations",
+       defaults.variations.count == 0, nil);
+
+    XCTVariationOptions *fresh = [[XCTVariationOptions alloc] initWithInputs:@{}];
+    ok("a constructed set keeps its inputs", fresh.inputs.count == 0, nil);
+    ok("a constructed set contributes no variations",
+       fresh.variations.count == 0, nil);
+
+    ok("a class's inputs come from the default options",
+       [[XCTSuiteConstructionPlainFixture testRunConfigurationInputs]
+           isEqualToDictionary:defaults.inputs], nil);
+    ok("a class's options are derived from its inputs",
+       [[XCTSuiteConstructionPlainFixture _variationOptions].inputs
+           isEqualToDictionary:defaults.inputs], nil);
+
+    // The two-argument factory, empty-configuration arm: the invocation is
+    // kept as the one-argument factory leaves it -- selector and signature
+    // preserved, target re-pointed to the case -- and the configuration is
+    // recorded on the case.
+    NSInvocation *invocation = identifierInvocation([XCTSuiteConstructionPlainFixture class],
+                                                    @selector(testExample));
+    NSDictionary *emptyConfiguration = @{};
+    XCTestCase *configured = [XCTSuiteConstructionPlainFixture
+        testCaseWithInvocation:invocation testRunConfiguration:emptyConfiguration];
+    ok("a case built with the empty configuration records it",
+       [configured._testRunConfiguration isEqualToDictionary:emptyConfiguration], nil);
+    ok("the invocation keeps its selector",
+       configured.invocation.selector == @selector(testExample), nil);
+    ok("the invocation is re-pointed at the case",
+       configured.invocation.target == (id)configured, nil);
+
+    // The non-empty arm rebuilds the invocation rather than retargeting it,
+    // because a configuration may widen the argument list an invocation cannot
+    // grow into. The selector and signature survive; the original is discarded.
+    NSInvocation *argumentInvocation =
+        identifierInvocation([XCTSuiteConstructionErrorConventionFixture class],
+                             @selector(testReportsThroughAnError:));
+    NSDictionary *nonEmptyConfiguration = @{ @"input": @"value" };
+    XCTestCase *rebuilt = [XCTSuiteConstructionErrorConventionFixture
+        testCaseWithInvocation:argumentInvocation testRunConfiguration:nonEmptyConfiguration];
+    ok("a non-empty configuration is recorded",
+       [rebuilt._testRunConfiguration isEqualToDictionary:nonEmptyConfiguration], nil);
+    ok("the rebuilt invocation keeps its selector",
+       rebuilt.invocation.selector == @selector(testReportsThroughAnError:), nil);
+    ok("the rebuilt invocation is re-pointed at the case",
+       rebuilt.invocation.target == (id)rebuilt, nil);
+
+    // The descriptor consumer, whole-class arm: this is the body of
+    // +testSuiteForTestCaseClass: after the swap. Three discovered tests become
+    // three cases, each built under a recorded empty configuration -- a case is
+    // never built configuration-less.
+    XCTestSuite *suite =
+        [XCTestSuite testSuiteForTestCaseClass:[XCTSuiteConstructionDiscoverySubclass class]];
+    ok("the whole-class suite is a case suite",
+       [suite isKindOfClass:[XCTestCaseSuite class]], NSStringFromClass([suite class]));
+    ok("the whole-class suite is named for the class",
+       [suite.name isEqualToString:@"XCTSuiteConstructionDiscoverySubclass"], suite.name);
+    ok("every discovered test becomes a case", suite.tests.count == 3,
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)suite.tests.count]);
+    if (suite.tests.count == 3) {
+        BOOL allCases = YES;
+        BOOL allEmptyConfigurations = YES;
+        for (XCTest *subtest in suite.tests) {
+            allCases = allCases && [subtest isKindOfClass:[XCTestCase class]];
+            allEmptyConfigurations = allCases &&
+                [((XCTestCase *)subtest)._testRunConfiguration isEqualToDictionary:@{}];
+        }
+        ok("every discovered test is a runnable case", allCases, nil);
+        ok("every discovered case was built under the empty configuration",
+           allEmptyConfigurations, nil);
+    }
+
+    // The suite is built in the descriptor consumer's order, which sorts method
+    // names without regard to case: testapple before testZebra, the opposite of
+    // the bytewise order +testInvocations produced before the swap.
+    XCTestSuite *caseSuite = [XCTestSuite testSuiteForTestCaseClass:[XCTSuiteConstructionCaseFixture class]];
+    ok("a whole-class suite orders methods case-insensitively",
+       caseSuite.tests.count == 2 && [[caseSuite.tests[0] _xctTestIdentifier].components[1]
+           isEqualToString:@"testapple"],
+       caseSuite.tests.count == 2
+           ? [caseSuite.tests[0] _xctTestIdentifier].identifierString : nil);
+
+    // The class-unavailable placeholder leg: a discovered test whose class
+    // cannot run here still appears in the suite, as a placeholder named for
+    // the test and carrying the class reason.
+    XCTestSuite *unavailableSuite =
+        [XCTestSuite testSuiteForTestCaseClass:
+            [XCTSuiteConstructionUnavailableWithTestsFixture class]];
+    ok("an unavailable class with tests keeps its plain suite",
+       [unavailableSuite class] == [XCTestSuite class],
+       NSStringFromClass([unavailableSuite class]));
+    ok("the unavailable suite holds its test as a placeholder",
+       unavailableSuite.tests.count == 1 &&
+           [unavailableSuite.tests[0] isKindOfClass:[XCTestCasePlaceholder class]],
+       [NSString stringWithFormat:@"%lu tests", (unsigned long)unavailableSuite.tests.count]);
+    if (unavailableSuite.tests.count == 1) {
+        XCTestCasePlaceholder *placeholder = unavailableSuite.tests[0];
+        ok("the placeholder is named for its test",
+           [[placeholder _xctTestIdentifier].identifierString
+               isEqualToString:@"XCTSuiteConstructionUnavailableWithTestsFixture/testUnavailable"],
+           [placeholder _xctTestIdentifier].identifierString);
+        ok("the placeholder carries the class reason",
+           [placeholder.reason isEqualToString:
+               @"Test class 'XCTSuiteConstructionUnavailableWithTestsFixture' is unavailable "
+               @"since it uses features not supported on this OS version"],
+           placeholder.reason);
+    }
+}
+
 static void testActivityObservation(void)
 {
     // Activity start and finish are reported through a private protocol layered
@@ -2988,6 +3132,7 @@ int main(void)
     testPlaceholder();
     testClassFromString();
     testEmptySuite();
+    testResolvedSuite();
     testEmptySuiteInclusion();
     testCaseSuiteLifecycle();
     testChildContext();

@@ -15,6 +15,7 @@
 		1A2B3C4E0000000000000122 /* XCTestCase.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000102 /* XCTestCase.m */; };
 		1A2B3C4E0000000000000123 /* XCTestRun.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000103 /* XCTestRun.m */; };
 		1A2B3C4E0000000000000135 /* XCTestCasePlaceholder.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000134 /* XCTestCasePlaceholder.m */; };
+		1A2B3C4E0000000000000137 /* XCTVariationOptions.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000136 /* XCTVariationOptions.m */; };
 		1A2B3C4E00000000000000E6 /* XCActivityRecord.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E00000000000000C6 /* XCActivityRecord.m */; };
 		1ACFB3A523F70A0000123458 /* XCTActivityRecordStack.m in Sources */ = {isa = PBXBuildFile; fileRef = 1ACFB3A023F70A0000123458 /* XCTActivityRecordStack.m */; };
 		1A2B3C4E0000000000000124 /* XCTestObservation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000104 /* XCTestObservation.m */; };
@@ -117,6 +118,7 @@
 		1A2B3C4E0000000000000105 /* XCTestAssertions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestAssertions.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000106 /* XCTestInternal.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestInternal.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000132 /* XCTTestInvocationDescriptor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTTestInvocationDescriptor.m; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000136 /* XCTVariationOptions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTVariationOptions.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000107 /* XCTestSupportTypes.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestSupportTypes.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000108 /* XCTestMetrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestMetrics.m; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000109 /* XCTestExpectation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XCTestExpectation.m; sourceTree = "<group>"; };
@@ -332,6 +334,7 @@
 				1A2B3C4E0000000000000105 /* XCTestAssertions.m */,
 				1A2B3C4E0000000000000106 /* XCTestInternal.m */,
 				1A2B3C4E0000000000000132 /* XCTTestInvocationDescriptor.m */,
+				1A2B3C4E0000000000000136 /* XCTVariationOptions.m */,
 				1A2B3C4E0000000000000107 /* XCTestSupportTypes.m */,
 				1A2B3C4E0000000000000108 /* XCTestMetrics.m */,
 				1A2B3C4E0000000000000109 /* XCTestExpectation.m */,
@@ -734,6 +737,7 @@
 				1A2B3C4E0000000000000125 /* XCTestAssertions.m in Sources */,
 				1A2B3C4E0000000000000126 /* XCTestInternal.m in Sources */,
 				1A2B3C4E0000000000000133 /* XCTTestInvocationDescriptor.m in Sources */,
+				1A2B3C4E0000000000000137 /* XCTVariationOptions.m in Sources */,
 				1A2B3C4E0000000000000127 /* XCTestSupportTypes.m in Sources */,
 				1A2B3C4E0000000000000128 /* XCTestMetrics.m in Sources */,
 				1A2B3C4E0000000000000129 /* XCTestExpectation.m in Sources */,

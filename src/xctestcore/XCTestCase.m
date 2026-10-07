@@ -73,6 +73,7 @@ static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selec
     // piece of state rather than each keeping their own.
     NSMutableArray<XCTPerformanceActivityRecord *> *_performanceRecords;
     id _measureInvocation;
+    NSDictionary *_testRunConfiguration;
 }
 
 #pragma mark - Creation
@@ -80,6 +81,52 @@ static NSString *_XCTSelectorNameByRemovingErrorAndAsyncSuffixes(NSString *selec
 + (instancetype)testCaseWithInvocation:(NSInvocation *)invocation
 {
     return [[self alloc] initWithInvocation:invocation];
+}
+
++ (instancetype)testCaseWithInvocation:(NSInvocation *)invocation
+                    testRunConfiguration:(NSDictionary *)testRunConfiguration
+{
+    // A non-empty configuration may widen the invocation's argument list, and
+    // an NSInvocation cannot be retargeted past its signature, so such a
+    // configuration rebuilds the invocation first: a fresh one with the same
+    // signature and selector, its target dropped here so the case owns it. The
+    // empty configuration -- the only one this port reaches -- keeps the
+    // invocation as it is, exactly as the one-argument factory does.
+    if (testRunConfiguration.count != 0) {
+        NSInvocation *rebuiltInvocation =
+            [NSInvocation invocationWithMethodSignature:invocation.methodSignature];
+        [rebuiltInvocation setSelector:invocation.selector];
+        invocation = rebuiltInvocation;
+    }
+    XCTestCase *testCase = [self testCaseWithInvocation:invocation];
+    if ([testCase isKindOfClass:[XCTestCase class]]) {
+        // The configuration is recorded so a later construction pass can read
+        // back the inputs this test was built under.
+        testCase->_testRunConfiguration = [testRunConfiguration copy];
+    }
+    return testCase;
+}
+
+- (NSDictionary *)_testRunConfiguration
+{
+    return _testRunConfiguration;
+}
+
++ (NSDictionary *)testRunConfigurationInputs
+{
+    // Probed rather than assumed, in the same shape as the rename hooks: the
+    // multi-device UIAutomation category is where a configurable test says
+    // which inputs it varies over, and an absent answer -- every class in this
+    // system -- is "no inputs", which the default options spell out.
+    if ([self respondsToSelector:@selector(testRunConfigurationInputsForUITesting)]) {
+        return [self testRunConfigurationInputsForUITesting];
+    }
+    return [XCTVariationOptions defaultVariationOptions].inputs;
+}
+
++ (XCTVariationOptions *)_variationOptions
+{
+    return [[XCTVariationOptions alloc] initWithInputs:[self testRunConfigurationInputs]];
 }
 
 - (instancetype)initWithInvocation:(NSInvocation *)invocation

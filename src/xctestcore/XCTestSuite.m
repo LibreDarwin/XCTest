@@ -17,6 +17,22 @@
 
 #import <stdlib.h>
 
+/// The single run configuration a test runs under when its class contributes no
+/// variations: the empty one. The reference seeds the same one-element array of
+/// an empty dictionary as the default its descriptor consumer falls back to;
+/// an empty dictionary cannot be a static initializer in the Foundation this
+/// SDK provides, so the seed is lazy, as it is in the reference.
+static NSArray<NSDictionary *> *_XCTestDefaultRunConfigurations;
+
+static NSArray<NSDictionary *> *XCTestDefaultRunConfigurations(void)
+{
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        _XCTestDefaultRunConfigurations = @[ @{} ];
+    });
+    return _XCTestDefaultRunConfigurations;
+}
+
 @implementation XCTestSuite {
     NSMutableArray<XCTest *> *_tests;
     NSString *_name;
@@ -298,12 +314,83 @@
 
 + (XCTestSuite *)testSuiteForTestCaseClass:(Class)testCaseClass
 {
-    XCTestSuite *suite = [[self alloc] initWithName:NSStringFromClass(testCaseClass)];
-    for (NSInvocation *invocation in [testCaseClass testInvocations]) {
-        // The case has to be an instance of the discovered subclass. Asking
-        // XCTestCase for it would build a base instance that does not override
-        // the test method, and every test would fail as unrecognised selector.
-        [suite addTest:[testCaseClass testCaseWithInvocation:invocation]];
+    // A suite for a whole class is the descriptor consumer with no selection:
+    // everything the class discovered runs, under the default configuration.
+    return [self _resolveTestSuiteByTestInvocationsInClass:testCaseClass
+                              filteringToTestIdentifiersToRun:nil];
+}
+
++ (XCTestSuite *)_resolveTestSuiteByTestInvocationsInClass:(Class)testCaseClass
+                               filteringToTestIdentifiersToRun:(XCTTestIdentifierSet *)filter
+{
+    // The empty suite first: a case suite for a class that can run, a plain
+    // named suite for one that cannot, both carrying the class's identifier so
+    // a selection that named the class matches this suite later.
+    XCTestSuite *suite = [self emptyTestSuiteForTestCaseClass:testCaseClass];
+    NSString *classUnavailableReason = nil;
+    if (!_XCTTestCaseClassIsAvailable(testCaseClass)) {
+        classUnavailableReason = [NSString stringWithFormat:
+            @"Test class '%@' is unavailable since it uses features not supported on this OS version",
+            testCaseClass];
+    }
+    for (XCTTestInvocationDescriptor *descriptor in [testCaseClass _testInvocationDescriptors]) {
+        // A selection drops a discovered test before anything is built for it.
+        // The identifier is asked only of a descriptor with an invocation: a
+        // placeholder-carrying descriptor has none to filter by, and the
+        // placeholder's identifier is derived from its selector string when it
+        // is built, so filtering it here would be answering a question about a
+        // name that does not exist yet. A nil identifier means the name cannot
+        // be trusted, and the case is kept rather than dropped on a guess.
+        if (filter != nil && descriptor.invocation != nil) {
+            XCTTestIdentifier *identifier =
+                [testCaseClass _identifierForInvocation:descriptor.invocation];
+            if (identifier != nil && ![filter containsTestIdentifier:identifier]) {
+                continue;
+            }
+        }
+        NSString *reason = classUnavailableReason;
+        if (reason == nil && descriptor.invocation == nil) {
+            // The other placeholder: the test was discovered and could not be
+            // run, and the descriptor carries why. The message is the reference
+            // spellings, with a descriptor's own error appended when it has
+            // one.
+            reason = @"Test is unavailable since it has no invocation";
+            if (descriptor.customErrorMessage != nil) {
+                reason = [reason stringByAppendingFormat:@". Error: %@",
+                         descriptor.customErrorMessage];
+            }
+        }
+        if (reason != nil) {
+            XCTTestIdentifier *identifier =
+                [testCaseClass _identifierForSelectorString:descriptor.selectorString];
+            if (identifier == nil) {
+                // The selector was a name after all, even though no method of
+                // it exists: the placeholder still has to be addressable, so
+                // the identifier falls back to the name as written.
+                identifier = [[XCTTestIdentifier alloc] initWithClassName:NSStringFromClass(testCaseClass)
+                                                               methodName:descriptor.selectorString];
+            }
+            [suite addTest:[[XCTestCasePlaceholder alloc] initWithIdentifier:identifier
+                                                                      reason:reason]];
+            continue;
+        }
+        // Runnable test: one case per variation, and without variations the
+        // default set of one empty configuration -- so a case is never built
+        // configuration-less. The configuration is recorded on the case by the
+        // two-argument factory.
+        NSArray<NSDictionary *> *variations = [testCaseClass _variationOptions].variations;
+        if (variations.count == 0) {
+            variations = XCTestDefaultRunConfigurations();
+        }
+        for (NSDictionary *variation in variations) {
+            XCTestCase *subtest =
+                [testCaseClass testCaseWithInvocation:descriptor.invocation
+                                  testRunConfiguration:variation];
+            if (filter != nil && ![filter containsTestIdentifier:subtest._xctTestIdentifier]) {
+                continue;
+            }
+            [suite addTest:subtest];
+        }
     }
     return suite;
 }

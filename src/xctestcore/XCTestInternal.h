@@ -547,6 +547,36 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
                      customErrorMessage:(nullable NSString *)customErrorMessage;
 @end
 
+#pragma mark - Run variations
+
+/// The set of run configurations a test class may vary a single test over.
+///
+/// A variation is one dictionary of inputs, and a class contributes the input
+/// axes for them. The reference computes the cartesian product over a shared
+/// key set; only its surface is declared here because that is all this port
+/// reaches -- no class contributes inputs, so the product is empty and the
+/// descriptor consumer substitutes the single empty configuration, which is the
+/// reference's own fallback for an empty answer.
+@interface XCTVariationOptions : NSObject
+
+- (instancetype)initWithInputs:(NSDictionary *)inputs;
+
+/// The input axes this set was built from.
+///
+/// Read-only and copied in, because the options a class runs under are derived
+/// fresh from its -testRunConfigurationInputs each time and nothing may mutate
+/// the source a derivation might be repeated from.
+@property (nonatomic, readonly, copy) NSDictionary *inputs;
+
+/// The configurations to run, or an empty array when there are no inputs.
+@property (nonatomic, readonly, copy) NSArray<NSDictionary *> *variations;
+
+/// The options every test runs under when a class contributes none of its own:
+/// a set of one configuration, the empty one.
++ (XCTVariationOptions *)defaultVariationOptions;
+
+@end
+
 /// How a test names itself, and the identifier that names it to the selection
 /// machinery.
 ///
@@ -689,6 +719,49 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 
 @end
 
+/// A test's run configuration, and the class hooks that supply variations.
+///
+/// `_testRunConfiguration` is the configuration the test was built with: nil
+/// for a test built without one, and the empty dictionary when the descriptor
+/// consumer built it -- the reference records the configuration it used, and
+/// reading it back is how a later construction pass reuses the same inputs.
+///
+/// The two class methods are where a configuration comes from in the first
+/// place. `testRunConfigurationInputsForUITesting` is declared and never
+/// implemented here on purpose, in the same shape as the rename hooks above:
+/// the reference answers it from the multi-device UIAutomation category this
+/// port does not carry, and `-testRunConfigurationInputs` probes for it before
+/// falling back to the default options' inputs, which are empty -- so the
+/// un-probed answers are the ones the reference's own absent category gives.
+@interface XCTestCase (XCTVariation)
+
+/// The run configuration this test was built with, or nil when it had none.
+@property (nonatomic, readonly, copy, nullable) NSDictionary *_testRunConfiguration;
+
+/// Builds a case for `invocation` running under `testRunConfiguration`.
+///
+/// A non-empty configuration may widen the invocation's argument list, so the
+/// invocation is rebuilt with the configuration present; the empty one leaves
+/// it in the one-argument factory's shape. The configuration is recorded on the
+/// case, which is how a later construction pass reads back what it was built
+/// under. Internal: the descriptor consumer is its only caller.
++ (instancetype)testCaseWithInvocation:(NSInvocation *)invocation
+                    testRunConfiguration:(NSDictionary *)testRunConfiguration;
+
+/// The class's contribution to how its tests vary, or the default (empty)
+/// inputs when the class contributes nothing.
++ (NSDictionary *)testRunConfigurationInputs;
+
+/// Declared and never implemented here on purpose; see the category comment.
++ (NSDictionary *)testRunConfigurationInputsForUITesting;
+
+/// The variation options this class runs under, derived fresh from
+/// -testRunConfigurationInputs so a class that changes its inputs between
+/// construction passes is answered with the current ones.
++ (XCTVariationOptions *)_variationOptions;
+
+@end
+
 /// Execution ordering: the sequence in which a container performs its tests.
 ///
 /// A run is ordered one of two ways, never both. Left alone, tests sort by
@@ -803,6 +876,21 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
 /// so a report can show the class was there and had nothing in it -- but not
 /// one that claims to know the class.
 + (XCTestSuite *)emptyTestSuiteForTestCaseClass:(Class)testCaseClass;
+
+/// Resolves `testCaseClass`'s discovered tests into a suite, respecting `filter`.
+///
+/// Every discovered test becomes a case built from its invocation, unless a
+/// selection filters it out, the class cannot run on this OS, or the descriptor
+/// has no invocation to run -- the last two add a placeholder carrying the
+/// reason, so the report still names the tests that failed to construct. Tests
+/// run under one configuration: each of the class's variations, or the single
+/// empty one when it contributes none.
+///
+/// `filter` is nil for a whole-class suite; the non-nil form exists for the
+/// selection-deferred construction path, which has no caller in this port yet,
+/// and is carried for the reference's sake.
++ (XCTestSuite *)_resolveTestSuiteByTestInvocationsInClass:(Class)testCaseClass
+                               filteringToTestIdentifiersToRun:(nullable XCTTestIdentifierSet *)filter;
 
 @end
 

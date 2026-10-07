@@ -213,6 +213,7 @@ XCTESTCORE_FW_OBJS := $(XCTESTCORE_OBJDIR)/XCTest.o $(XCTESTCORE_OBJDIR)/XCTestS
 	$(XCTESTCORE_OBJDIR)/XCTContext.o \
 	$(XCTESTCORE_OBJDIR)/XCTestInternal.o $(XCTESTCORE_OBJDIR)/XCTestSupportTypes.o \
 	$(XCTESTCORE_OBJDIR)/XCTTestInvocationDescriptor.o \
+	$(XCTESTCORE_OBJDIR)/XCTVariationOptions.o \
 	$(XCTESTCORE_OBJDIR)/XCTestMetrics.o \
 	$(XCTESTCORE_OBJDIR)/XCTestExpectation.o $(XCTESTCORE_OBJDIR)/XCTWaiter.o \
 	$(XCTESTCORE_OBJDIR)/XCTNSNotificationExpectation.o \
@@ -333,6 +334,10 @@ $(XCTESTCORE_OBJDIR)/XCTestInternal.o: src/xctestcore/XCTestInternal.m $(XCTEST_
 $(XCTESTCORE_OBJDIR)/XCTTestInvocationDescriptor.o: src/xctestcore/XCTTestInvocationDescriptor.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h
 	@mkdir -p $(XCTESTCORE_OBJDIR)
 	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTTestInvocationDescriptor.m
+
+$(XCTESTCORE_OBJDIR)/XCTVariationOptions.o: src/xctestcore/XCTVariationOptions.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h
+	@mkdir -p $(XCTESTCORE_OBJDIR)
+	$(CC) $(OBJCFLAGS) -c -o $@ src/xctestcore/XCTVariationOptions.m
 
 $(XCTESTCORE_OBJDIR)/XCTestSupportTypes.o: src/xctestcore/XCTestSupportTypes.m $(XCTEST_FW_HEADERS) src/xctestcore/XCTestInternal.h
 	@mkdir -p $(XCTESTCORE_OBJDIR)
