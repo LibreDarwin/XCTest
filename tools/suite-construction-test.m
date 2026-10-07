@@ -37,6 +37,11 @@
 //     variations), a placeholder standing in for a test whose class cannot run
 //     here, and the whole list ordered the way the descriptor consumer orders
 //     it -- without regard to case.
+//   - Configuration construction. Turning a configuration into a suite tree:
+//     grouping a flat selection back into classes, preparing a container from
+//     it so a class selected two ways arrives once, sourcing one suite per test
+//     bundle in the process, and which of the two run shapes -- everything, or
+//     a selection -- a configuration asks for.
 //
 // It links the installed framework rather than the object files, so it also
 // covers installation and the private declarations in XCTestInternal.h, which is
@@ -3297,6 +3302,331 @@ static void testContextDelegate(void)
     ok("without disturbing the delegate itself", survivor.deallocated == NO, nil);
 }
 
+// The first child of a suite that is named after it, or nil. Grouping and the
+// run entry points all build containers whose children are class suites named
+// for the class, and finding one by name is the question every check here asks.
+static XCTestSuite *suiteNamedIn(XCTestSuite *parent, NSString *name)
+{
+    for (XCTest *test in parent.tests) {
+        if ([test isKindOfClass:[XCTestSuite class]] && [test.name isEqualToString:name]) {
+            return (XCTestSuite *)test;
+        }
+    }
+    return nil;
+}
+
+// The entry points that turn a configuration into a suite tree. A run is
+// handed a configuration -- a selection, an ordering, a bundle -- and the tree
+// it runs is built four steps: the flat selection is grouped back into classes,
+// a container is prepared from the grouping, the all-tests shape sources one
+// suite per bundle in the process, and the outer suite is named for which of
+// the two shapes was asked for.
+static void testConfigurationConstruction(void)
+{
+    printf("\nconfiguration construction\n");
+
+    XCTestConfiguration *configuration = XCTestConfiguration.activeTestConfiguration;
+    // Everything this section sets on the configuration it gives back, because
+    // the sections after it read the same process-wide object.
+    NSURL *savedBundleURL = configuration.testBundleURL;
+    XCTTestSelection *savedSelection = configuration.testSelection;
+    XCTTestExecutionOrdering savedOrdering = configuration.testExecutionOrdering;
+    NSInteger (^savedGenerator)(void) = configuration.randomNumberGenerator;
+
+    // A suite carries the name it was made with, and -setName: replaces it --
+    // the rename a selected run's container goes through after it is built.
+    XCTestSuite *renamed = [XCTestSuite testSuiteWithName:@"BeforeRenaming"];
+    ok("a suite made with a name carries it",
+       [renamed.name isEqualToString:@"BeforeRenaming"], renamed.name);
+    [renamed setName:@"AfterRenaming"];
+    ok("setName: replaces the name",
+       [renamed.name isEqualToString:@"AfterRenaming"], renamed.name);
+
+    // Grouping: a flat selection comes back split into the classes to run whole
+    // and, per class, the methods of it that were named.
+    XCTTestIdentifier *wholeClass =
+        [[XCTTestIdentifier alloc] initWithClassName:@"XCTSuiteConstructionPlainFixture"];
+    XCTTestIdentifier *method =
+        [[XCTTestIdentifier alloc] initWithClassName:@"XCTSuiteConstructionCaseFixture"
+                                           methodName:@"testapple"];
+    XCTTestIdentifier *swift =
+        [[XCTTestIdentifier alloc] initWithSwiftTestingStringRepresentation:
+                                       @"XCTSuiteConstructionPlainFixture/testapple()"];
+    ok("the Swift spelling of a method reads as an identifier", swift != nil, nil);
+    XCTTestIdentifier *unloaded =
+        [[XCTTestIdentifier alloc] initWithClassName:@"XCTSuiteConstructionNoSuchClass"
+                                           methodName:@"testFoo"];
+    NSMutableArray<XCTTestIdentifier *> *spellings =
+        [NSMutableArray arrayWithObjects:wholeClass, method, nil];
+    if (swift != nil) {
+        [spellings addObject:swift];
+    }
+    [spellings addObject:unloaded];
+    XCTTestIdentifierSet *grouping =
+        [[XCTTestIdentifierSet alloc] initWithArray:spellings];
+
+    NSMutableSet<Class> *wholeClasses = nil;
+    NSMutableDictionary<NSString *, XCTTestIdentifierSet *> *methodsByClass = nil;
+    [XCTestSuite groupTestIdentifiers:grouping
+                          intoClasses:&wholeClasses
+             andTestMethodIdentifiers:&methodsByClass];
+    ok("a bare class name groups as a whole class",
+       wholeClasses.count == 1 &&
+           [wholeClasses containsObject:[XCTSuiteConstructionPlainFixture class]],
+       [NSString stringWithFormat:@"%lu", (unsigned long)wholeClasses.count]);
+    ok("a class/method pair groups under its class",
+       methodsByClass.count == 1 &&
+           [methodsByClass[@"XCTSuiteConstructionCaseFixture"] containsTestIdentifier:method],
+       [NSString stringWithFormat:@"%lu", (unsigned long)methodsByClass.count]);
+    // A Swift Testing identifier names the same test but does not carry the
+    // class-and-method spelling, so grouping must not read its second component
+    // as a method of the class it happens to share a first component with.
+    ok("a Swift Testing spelling groups as no method of its class",
+       methodsByClass[@"XCTSuiteConstructionPlainFixture"] == nil, nil);
+    // The unloaded class is skipped rather than grouped under a class that is
+    // not there; the two counts above already name everything that was grouped,
+    // so this pins that nothing else arrived alongside it.
+    ok("a class not loaded in this process groups nothing",
+       wholeClasses.count == 1 && methodsByClass.count == 1, nil);
+
+    // Either result may be declined, alone or together; the answers that were
+    // asked for still come back in full.
+    NSMutableSet<Class> *classesOnly = nil;
+    [XCTestSuite groupTestIdentifiers:grouping
+                          intoClasses:&classesOnly
+             andTestMethodIdentifiers:NULL];
+    ok("a caller may ask only for the whole classes",
+       classesOnly.count == 1, [NSString stringWithFormat:@"%lu",
+                                                  (unsigned long)classesOnly.count]);
+    NSMutableDictionary<NSString *, XCTTestIdentifierSet *> *methodsOnly = nil;
+    [XCTestSuite groupTestIdentifiers:grouping
+                          intoClasses:NULL
+             andTestMethodIdentifiers:&methodsOnly];
+    ok("a caller may ask only for the methods",
+       methodsOnly.count == 1,
+       [NSString stringWithFormat:@"%lu", (unsigned long)methodsOnly.count]);
+    [XCTestSuite groupTestIdentifiers:grouping
+                          intoClasses:NULL
+             andTestMethodIdentifiers:NULL];
+    ok("a caller may ask for neither result", methodsOnly.count == 1, nil);
+
+    // Preparing a container: one suite per selected class, whichever way the
+    // class was named. A nil selection names nothing and prepares nothing.
+    XCTestSuite *emptyContainer = [XCTestSuite testSuiteWithName:@"EmptyContainer"];
+    [XCTestSuite prepareContainerSuite:emptyContainer toRunTestIdentifiers:nil];
+    ok("a nil selection prepares an empty container",
+       emptyContainer.tests.count == 0, nil);
+
+    XCTestSuite *container = [XCTestSuite testSuiteWithName:@"PreparedContainer"];
+    XCTTestIdentifierSet *twoClasses =
+        [[XCTTestIdentifierSet alloc] initWithArray:@[ wholeClass, method ]];
+    [XCTestSuite prepareContainerSuite:container toRunTestIdentifiers:twoClasses];
+    ok("each selected class contributes one suite",
+       container.tests.count == 2,
+       [NSString stringWithFormat:@"%lu", (unsigned long)container.tests.count]);
+    XCTestSuite *wholeSuite = suiteNamedIn(container, @"XCTSuiteConstructionPlainFixture");
+    XCTestSuite *methodSuite = suiteNamedIn(container, @"XCTSuiteConstructionCaseFixture");
+    ok("the whole class contributes a suite named for it",
+       wholeSuite != nil && wholeSuite.tests.count == 1, nil);
+    ok("the method's class contributes a suite named for it",
+       methodSuite != nil, nil);
+    ok("the method's suite holds only the selected test",
+       methodSuite.tests.count == 1 &&
+           [((XCTest *)[methodSuite.tests firstObject])._xctTestIdentifier.identifierString
+               isEqualToString:@"XCTSuiteConstructionCaseFixture/testapple"],
+       ((XCTest *)[methodSuite.tests firstObject])._xctTestIdentifier.identifierString);
+
+    // The same class selected whole and by a method of it: one suite, and the
+    // test named both ways stands in it once -- a container that held it twice
+    // would run it twice.
+    XCTTestIdentifierSet *bothWays =
+        [[XCTTestIdentifierSet alloc] initWithArray:@[
+            [[XCTTestIdentifier alloc]
+                initWithClassName:@"XCTSuiteConstructionPlainFixture"],
+            [[XCTTestIdentifier alloc]
+                initWithClassName:@"XCTSuiteConstructionPlainFixture"
+                       methodName:@"testExample"]
+        ]];
+    XCTestSuite *mergedContainer = [XCTestSuite testSuiteWithName:@"MergedContainer"];
+    [XCTestSuite prepareContainerSuite:mergedContainer toRunTestIdentifiers:bothWays];
+    ok("a class selected whole and by a method is one suite",
+       mergedContainer.tests.count == 1,
+       [NSString stringWithFormat:@"%lu", (unsigned long)mergedContainer.tests.count]);
+    XCTestSuite *merged = suiteNamedIn(mergedContainer,
+                                       @"XCTSuiteConstructionPlainFixture");
+    ok("the test named both ways stands in it once",
+       merged != nil && merged.tests.count == 1,
+       [NSString stringWithFormat:@"%lu",
+                                  (unsigned long)(merged != nil ? merged.tests.count : 0)]);
+
+    // The bundle suites: where the all-tests shape gets its children. The
+    // include-empty answer is the crash-restart restore path, which answers
+    // with nothing; the scan keeps every bundle in the process except the
+    // framework's own, and each bundle holds the suites of its classes that
+    // have something to show.
+    NSDictionary *restore = [XCTestSuite suitesForBundlesIncludingEmptySuites:YES];
+    ok("including empty suites answers with nothing",
+       restore.count == 0,
+       [NSString stringWithFormat:@"%lu", (unsigned long)restore.count]);
+    NSDictionary<NSString *, XCTestSuite *> *byBundle =
+        [XCTestSuite suitesForBundlesIncludingEmptySuites:NO];
+    NSString *toolPath =
+        [[NSBundle bundleForClass:[XCTSuiteConstructionPlainFixture class]] bundlePath];
+    NSString *frameworkPath = [[NSBundle bundleForClass:[XCTest class]] bundlePath];
+    XCTestSuite *toolBundle = byBundle[toolPath];
+    ok("the bundle holding the fixtures is among them",
+       toolBundle != nil, toolPath);
+    ok("the framework's own bundle is left out",
+       byBundle[frameworkPath] == nil, frameworkPath);
+    ok("the tests of this process come from one bundle",
+       byBundle.count == 1,
+       [NSString stringWithFormat:@"%lu", (unsigned long)byBundle.count]);
+    ok("a bundle suite is named from its path",
+       [toolBundle.name isEqualToString:toolPath.lastPathComponent],
+       toolBundle.name);
+    BOOL everyChildIsASuite = toolBundle != nil;
+    for (XCTest *child in toolBundle.tests) {
+        if (![child isKindOfClass:[XCTestSuite class]]) {
+            everyChildIsASuite = NO;
+        }
+    }
+    ok("every child of a bundle suite is a suite of its own",
+       everyChildIsASuite, nil);
+    ok("a class with tests contributes its suite",
+       suiteNamedIn(toolBundle, @"XCTSuiteConstructionPlainFixture") != nil, nil);
+    // No tests means no suite: an empty case suite is a runnable class that
+    // filtered down to nothing, and the report has nothing to say about it.
+    ok("a class with no tests contributes no suite",
+       suiteNamedIn(toolBundle, @"XCTSuiteConstructionNoTestsFixture") == nil, nil);
+
+    // The selected-run container: built from a selection, named after the
+    // bundle it runs from, and holding one suite per selected class in
+    // execution order.
+    configuration.testBundleURL =
+        [NSURL fileURLWithPath:@"/tmp/ConstructionRun.xctest"];
+    ok("the configuration reports a bundle's file name",
+       [configuration.testBundleName isEqualToString:@"ConstructionRun.xctest"],
+       configuration.testBundleName);
+    XCTestSuite *selected =
+        [XCTestSuite testClassSuitesForTestIdentifiers:twoClasses
+                              skippingTestIdentifiers:nil
+                               randomNumberGenerator:nil];
+    ok("a selected container is named for the bundle",
+       [selected.name isEqualToString:@"ConstructionRun.xctest"], selected.name);
+    ok("one suite per selected class is in it",
+       selected.tests.count == 2,
+       [NSString stringWithFormat:@"%lu", (unsigned long)selected.tests.count]);
+    XCTestSuite *firstInOrder = (XCTestSuite *)selected.tests[0];
+    XCTestSuite *secondInOrder = (XCTestSuite *)selected.tests[1];
+    ok("the suites are in execution order",
+       [firstInOrder.name isEqualToString:@"XCTSuiteConstructionCaseFixture"] &&
+           [secondInOrder.name isEqualToString:@"XCTSuiteConstructionPlainFixture"],
+       firstInOrder.name);
+    XCTTestIdentifier *caseClass =
+        [[XCTTestIdentifier alloc] initWithClassName:@"XCTSuiteConstructionCaseFixture"];
+    XCTestSuite *afterSkip =
+        [XCTestSuite testClassSuitesForTestIdentifiers:twoClasses
+                              skippingTestIdentifiers:[[XCTTestIdentifierSet alloc]
+                                                          initWithTestIdentifier:method]
+                               randomNumberGenerator:nil];
+    ok("a skipped method leaves an empty suite behind",
+       afterSkip.tests.count == 2 &&
+           suiteNamedIn(afterSkip, @"XCTSuiteConstructionCaseFixture") != nil &&
+           suiteNamedIn(afterSkip, @"XCTSuiteConstructionCaseFixture").tests.count == 0,
+       [NSString stringWithFormat:@"%lu", (unsigned long)afterSkip.tests.count]);
+    XCTestSuite *afterWholeClassSkip =
+        [XCTestSuite testClassSuitesForTestIdentifiers:twoClasses
+                              skippingTestIdentifiers:[[XCTTestIdentifierSet alloc]
+                                                          initWithTestIdentifier:caseClass]
+                               randomNumberGenerator:nil];
+    ok("a skipped class's suite is removed",
+       afterWholeClassSkip.tests.count == 1 &&
+           suiteNamedIn(afterWholeClassSkip, @"XCTSuiteConstructionPlainFixture") != nil,
+       [NSString stringWithFormat:@"%lu", (unsigned long)afterWholeClassSkip.tests.count]);
+    XCTestSuite *nothingToRun =
+        [XCTestSuite testClassSuitesForTestIdentifiers:nil
+                              skippingTestIdentifiers:nil
+                               randomNumberGenerator:nil];
+    ok("a nil run set prepares nothing",
+       nothingToRun.tests.count == 0,
+       [NSString stringWithFormat:@"%lu", (unsigned long)nothingToRun.tests.count]);
+
+    // The two run shapes. A selection: SelectedTests, one container, named for
+    // the bundle. No selection: AllTests, one suite per bundle in the process.
+    configuration.testSelection =
+        [[XCTTestSelection alloc] initWithIdentifiersToRun:twoClasses
+                                        identifiersToSkip:nil
+                                                 tagsToRun:nil
+                                                 tagsToSkip:nil];
+    XCTestSuite *selectedRun = [XCTestSuite testSuiteForTestConfiguration:configuration];
+    ok("a run that names tests is built from the configuration",
+       selectedRun != nil, nil);
+    ok("a run that names tests is named SelectedTests",
+       [selectedRun.name isEqualToString:@"SelectedTests"], selectedRun.name);
+    ok("a selected run holds exactly the container",
+       selectedRun.tests.count == 1,
+       [NSString stringWithFormat:@"%lu", (unsigned long)selectedRun.tests.count]);
+    XCTestSuite *containerInRun = (XCTestSuite *)[selectedRun.tests firstObject];
+    ok("the container is named for the bundle",
+       [containerInRun.name isEqualToString:@"ConstructionRun.xctest"],
+       containerInRun.name);
+    ok("the container holds both selected classes",
+       containerInRun.tests.count == 2,
+       [NSString stringWithFormat:@"%lu", (unsigned long)containerInRun.tests.count]);
+
+    ok("a nil configuration builds nothing",
+       [XCTestSuite testSuiteForTestConfiguration:nil] == nil, nil);
+
+    configuration.testSelection = [[XCTTestSelection alloc] init];
+    ok("a configuration born without a selection names nothing to run",
+       configuration.testIdentifiersToRun == nil, nil);
+    XCTestSuite *allRun = [XCTestSuite testSuiteForTestConfiguration:configuration];
+    ok("a run that names nothing is named AllTests",
+       [allRun.name isEqualToString:@"AllTests"], allRun.name);
+    ok("an all-tests run holds one suite per bundle",
+       allRun.tests.count == byBundle.count,
+       [NSString stringWithFormat:@"%lu", (unsigned long)allRun.tests.count]);
+
+    // A run that skips but does not select: named for the selection it made,
+    // built from every bundle, and the skip reaches the class suites inside.
+    XCTTestIdentifierSet *skipOnlySet =
+        [[XCTTestIdentifierSet alloc] initWithTestIdentifier:wholeClass];
+    configuration.testSelection =
+        [[XCTTestSelection alloc] initWithIdentifiersToRun:nil
+                                        identifiersToSkip:skipOnlySet
+                                                 tagsToRun:nil
+                                                 tagsToSkip:nil];
+    XCTestSuite *skipOnlyRun = [XCTestSuite testSuiteForTestConfiguration:configuration];
+    ok("a run that only skips is named for the selection it made",
+       [skipOnlyRun.name isEqualToString:@"SelectedTests"], skipOnlyRun.name);
+    ok("the skip-only run still builds every bundle",
+       skipOnlyRun.tests.count == byBundle.count,
+       [NSString stringWithFormat:@"%lu", (unsigned long)skipOnlyRun.tests.count]);
+    XCTestSuite *bundleAfterSkip = (XCTestSuite *)[skipOnlyRun.tests firstObject];
+    ok("the skip set reaches the class suites",
+       suiteNamedIn(bundleAfterSkip, @"XCTSuiteConstructionPlainFixture") == nil, nil);
+
+    // Random ordering asks the configuration's own generator for its numbers,
+    // and changes the order rather than the contents.
+    configuration.testSelection =
+        [[XCTTestSelection alloc] initWithIdentifiersToRun:twoClasses
+                                        identifiersToSkip:nil
+                                                 tagsToRun:nil
+                                                 tagsToSkip:nil];
+    configuration.testExecutionOrdering = XCTTestExecutionOrderingRandom;
+    configuration.randomNumberGenerator = ^NSInteger(void) { return 0; };
+    XCTestSuite *shuffledRun = [XCTestSuite testSuiteForTestConfiguration:configuration];
+    XCTestSuite *shuffledContainer = (XCTestSuite *)[shuffledRun.tests firstObject];
+    ok("a selected run in random order still holds both selected classes",
+       shuffledContainer.tests.count == 2,
+       [NSString stringWithFormat:@"%lu", (unsigned long)shuffledContainer.tests.count]);
+
+    configuration.testBundleURL = savedBundleURL;
+    configuration.testSelection = savedSelection;
+    configuration.testExecutionOrdering = savedOrdering;
+    configuration.randomNumberGenerator = savedGenerator;
+}
+
 int main(void)
 {
     printf("XCTestSuite construction from a selection\n");
@@ -3336,6 +3666,7 @@ int main(void)
     testActivityObservation();
     testPlaceholderObservation();
     testActivityRecord();
+    testConfigurationConstruction();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }

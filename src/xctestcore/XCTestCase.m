@@ -1441,11 +1441,12 @@ Class _XCTTestCaseClassFromString(NSString *className)
 
 + (XCTestSuite *)defaultTestSuite
 {
-    XCTestSuite *suite = [[XCTestSuite alloc] initWithName:NSStringFromClass(self)];
-    for (NSInvocation *invocation in [self testInvocations]) {
-        [suite addTest:[XCTestCase testCaseWithInvocation:invocation]];
-    }
-    return suite;
+    // The reference's default suite is `testSuiteForTestCaseClass:`: a class
+    // the selection machinery can build out of itself. Building the suite here
+    // by hand would lose the class identifier (so a whole-class skip could
+    // never address it) and would construct each case on the base
+    // XCTestCase instead of the class under test.
+    return [XCTestSuite testSuiteForTestCaseClass:self];
 }
 
 + (void)setUp

@@ -938,6 +938,76 @@ typedef NS_ENUM(NSUInteger, XCTTestMethodConvention) {
                                    inTestClass:(Class)testCaseClass
                                      variations:(NSArray<NSDictionary *> *)variations;
 
+/// The suite that runs a whole configuration, the way a run session starts.
+///
+/// Answers nil when there is nothing to build: no configuration, or a
+/// selection whose bundle has no name.
++ (nullable instancetype)testSuiteForTestConfiguration:(nullable XCTestConfiguration *)configuration;
+
+/// Builds a suite from `configuration`, the reference's -initWithTestConfiguration:.
+///
+/// Two paths, decided by whether the configuration's selection named anything
+/// to run. With identifiers, the selection is grouped into whole classes and
+/// classes with specific tests and resolved into one container named after the
+/// configuration's bundle. Without, the container holds one suite per test
+/// bundle found in the process, named "AllTests". Either way the configuration's
+/// ordering and skip set are applied to the result. Answers nil when there is
+/// nothing to build: no configuration, or a selection whose bundle has no name.
+- (nullable instancetype)_initWithTestConfiguration:(nullable XCTestConfiguration *)configuration;
+
+/// The selected-tests half of suite building, ownable directly -- the path
+/// -_initWithTestConfiguration: takes for a selection.
+///
+/// Groups `identifiersToRun` into whole classes and classes with specific
+/// tests, resolves each, and collects the results into a container named after
+/// the active configuration's bundle. The container is then sorted by the
+/// default execution ordering, shuffled with `generator` when one is given, and
+/// stripped of everything `identifiersToSkip` names. A nil "to run" set runs
+/// nothing and a nil "skip" set skips nothing; the container is returned
+/// either way.
++ (XCTestSuite *)testClassSuitesForTestIdentifiers:(nullable XCTTestIdentifierSet *)identifiersToRun
+                          skippingTestIdentifiers:(nullable XCTTestIdentifierSet *)identifiersToSkip
+                             randomNumberGenerator:(nullable XCTRandomNumberGenerator)generator;
+
+/// Fills `containerSuite` with the suites a selection asks for.
+///
+/// A nil "to run" set fills nothing. Whole classes contribute their default
+/// suites; classes selected by method contribute suites resolved from the
+/// requested identifiers. Candidates that share a name are merged by name, so a
+/// class selected both whole and by method is one suite in the container. The
+/// merge is an adaptation: the reference's add-candidate block drops every
+/// candidate with a name -- which here is all of them -- and would empty the
+/// container.
++ (void)prepareContainerSuite:(XCTestSuite *)containerSuite
+         toRunTestIdentifiers:(nullable XCTTestIdentifierSet *)identifiersToRun;
+
+/// Splits `identifiers` into the classes to run whole and the classes to run
+/// by selected tests.
+///
+/// The out parameters are what grouping produces: a set of the classes a
+/// selection named bare, and a map from a class's name to the identifiers of
+/// its selected tests -- keyed by name rather than by Class, because this
+/// platform's NSMapTable offers only its legacy C interface. The name is the
+/// identifier's own first component, which NSClassFromString resolves back to
+/// the same class. Both are assigned when non-NULL. An identifier that does not
+/// use class/method semantics, or names a class that is not loaded in this
+/// process, is skipped.
++ (void)groupTestIdentifiers:(XCTTestIdentifierSet *)identifiers
+                 intoClasses:(NSMutableSet<Class> * _Nonnull * _Nullable)wholeClassIdentifiersOut
+    andTestMethodIdentifiers:(NSMutableDictionary<NSString *, XCTTestIdentifierSet *> * _Nonnull * _Nullable)classesToIdentifiersOut;
+
+/// One suite per test bundle found in the process, keyed by bundle path.
+///
+/// Scans the loaded XCTestCase subclasses and groups each class's suite under
+/// the bundle it was linked into. Classes linked into the framework's own
+/// bundle are the machinery and are skipped, and a class suite that would not
+/// be included is dropped too.
++ (NSDictionary<NSString *, XCTestSuite *> *)suitesForBundlesIncludingEmptySuites:(BOOL)includeEmptySuites;
+
+/// Renames the suite, taking over from -name: a selected-tests container is
+/// given its bundle's name after construction.
+- (void)setName:(NSString *)name;
+
 @end
 
 #pragma mark - XCTestCasePlaceholder

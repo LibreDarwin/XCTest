@@ -33,6 +33,13 @@ static NSArray<NSDictionary *> *XCTestDefaultRunConfigurations(void)
     return _XCTestDefaultRunConfigurations;
 }
 
+/// The two names a configuration-built suite is given, matching the reference's
+/// private _XCTTestSuite_AllTestsIdentifier and
+/// _XCTTestSuite_SelectedTestsIdentifier: what runs when a configuration asks
+/// for everything, and what runs when a selection names the tests.
+static NSString * const XCTestSuiteAllTestsName = @"AllTests";
+static NSString * const XCTestSuiteSelectedTestsName = @"SelectedTests";
+
 @implementation XCTestSuite {
     NSMutableArray<XCTest *> *_tests;
     NSString *_name;
@@ -84,6 +91,14 @@ static NSArray<NSDictionary *> *XCTestDefaultRunConfigurations(void)
 - (NSString *)name
 {
     return _name;
+}
+
+/// Takes over from -name, the same way the reference renames a suite: the
+/// container of a selected run is named after its bundle after the container
+/// has been built.
+- (void)setName:(NSString *)name
+{
+    _name = [name copy];
 }
 
 - (instancetype)init
@@ -534,6 +549,286 @@ static NSArray<NSDictionary *> *XCTestDefaultRunConfigurations(void)
                                     filteringToTestIdentifiersToRun:[identifiers setByAddingSwiftCounterparts]];
     }
     return [self _resolveTestSuiteBySelectorsInClass:identifiers inTestCaseClass:testCaseClass];
+}
+
+#pragma mark - Configuration construction
+
+/// The entry a run session uses to turn its configuration into a suite.
++ (instancetype)testSuiteForTestConfiguration:(XCTestConfiguration *)configuration
+{
+    // The reference builds through -initWithTestConfiguration:, which ignores
+    // the receiver it is sent to and answers a brand-new suite. This port keeps
+    // the two-method shape but makes the initializer initializer-shaped, so the
+    // suite is allocated here and filled below, and the allocation happens once.
+    return [[self alloc] _initWithTestConfiguration:configuration];
+}
+
+- (instancetype)_initWithTestConfiguration:(XCTestConfiguration *)configuration
+{
+    // Two shapes of run, decided by whether the configuration's selection names
+    // anything to run. With identifiers: a selected run, grouped into classes
+    // and resolved. Without: everything in the process runs, one suite per test
+    // bundle. Both paths apply the configuration's ordering and its "skip" set
+    // to the finished container.
+    if (configuration == nil) {
+        // The reference treats a nil configuration as a crash-restart event and
+        // dives into diagnostics; that recovery is not ported, so there is
+        // nothing to build and nil is the honest answer.
+        return nil;
+    }
+    XCTTestIdentifierSet *identifiersToRun = configuration.testIdentifiersToRun;
+    NSString *name;
+    if (identifiersToRun != nil || configuration.testIdentifiersToSkip.count != 0) {
+        name = XCTestSuiteSelectedTestsName;
+    } else {
+        name = XCTestSuiteAllTestsName;
+    }
+    self = [self initWithName:name];
+    if (self == nil) {
+        return self;
+    }
+    if (identifiersToRun == nil) {
+        // Everything: one suite per bundle found in the process, then the
+        // ordering and exclusion the configuration asked for.
+        NSDictionary<NSString *, XCTestSuite *> *bundles =
+            [XCTestSuite suitesForBundlesIncludingEmptySuites:NO];
+        for (NSString *bundlePath in bundles) {
+            [self addTest:bundles[bundlePath]];
+        }
+        if (configuration.testExecutionOrdering == XCTTestExecutionOrderingRandom) {
+            [self _applyRandomExecutionOrderingWithGenerator:(XCTRandomNumberGenerator)
+                                     configuration.randomNumberGenerator];
+        }
+        if (configuration.testIdentifiersToSkip.count != 0) {
+            [self removeTestsWithIdentifierInSet:configuration.testIdentifiersToSkip];
+        }
+    } else {
+        // A selection: grouped and resolved by the class method below, then
+        // named after the bundle the run came from.
+        NSString *bundleName = configuration.testBundleName;
+        if (bundleName == nil) {
+            // The reference treats a selection whose bundle has no name the
+            // same way it treats a nil configuration: a crash-restart event.
+            // Not ported; a run that has nothing to name has nothing.
+            return nil;
+        }
+        XCTestSuite *selected =
+            [XCTestSuite testClassSuitesForTestIdentifiers:identifiersToRun
+                                  skippingTestIdentifiers:configuration.testIdentifiersToSkip
+                                   randomNumberGenerator:(configuration.testExecutionOrdering ==
+                                                                  XCTTestExecutionOrderingRandom
+                                                          ? (XCTRandomNumberGenerator)
+                                                          configuration.randomNumberGenerator
+                                                          : nil)];
+        [selected setName:bundleName];
+        [self addTest:selected];
+    }
+    return self;
+}
+
+/// The selected-tests half of suite building, reachable directly by a caller
+/// that already has the identifiers split out.
++ (XCTestSuite *)testClassSuitesForTestIdentifiers:(XCTTestIdentifierSet *)identifiersToRun
+                          skippingTestIdentifiers:(XCTTestIdentifierSet *)identifiersToSkip
+                             randomNumberGenerator:(XCTRandomNumberGenerator)generator
+{
+    // A nil "to run" set runs nothing: the reference substitutes the empty set,
+    // which groups nothing and leaves the container empty.
+    if (identifiersToRun == nil) {
+        identifiersToRun = [XCTTestIdentifierSet new];
+    }
+    // The container is named after the bundle that is actually running, so the
+    // report's top line says where the tests came from.
+    NSString *suiteName = [XCTestConfiguration activeTestConfiguration].testBundleName;
+    XCTestSuite *container = [[self alloc] initWithName:suiteName];
+    [self prepareContainerSuite:container toRunTestIdentifiers:identifiersToRun];
+    [container _sortTestsUsingDefaultExecutionOrdering];
+    if (generator != nil) {
+        // Random only when the caller asked for it; a nil generator is how a
+        // run that wants the default order stays with the sort above.
+        [container _applyRandomExecutionOrderingWithGenerator:generator];
+    }
+    if (identifiersToSkip.count != 0) {
+        // [nil count] is 0, so a selection that names nothing to skip skips the
+        // exclusion pass.
+        [container removeTestsWithIdentifierInSet:identifiersToSkip];
+    }
+    return container;
+}
+
++ (void)prepareContainerSuite:(XCTestSuite *)containerSuite
+         toRunTestIdentifiers:(XCTTestIdentifierSet *)identifiersToRun
+{
+    if (identifiersToRun == nil) {
+        identifiersToRun = [XCTTestIdentifierSet new];
+    }
+    NSMutableSet<Class> *wholeClasses = [NSMutableSet set];
+    NSMutableDictionary<NSString *, XCTTestIdentifierSet *> *classesToIdentifiers = nil;
+    [XCTestSuite groupTestIdentifiers:identifiersToRun
+                          intoClasses:&wholeClasses
+             andTestMethodIdentifiers:&classesToIdentifiers];
+
+    // Candidates are gathered by name so the container ends up with one suite
+    // per class, whether the class was selected whole or by its methods -- or,
+    // when the selection names it both ways, one suite holding both. See the
+    // merge in the block below.
+    NSMutableDictionary<NSString *, XCTestSuite *> *namedSuites = [NSMutableDictionary dictionary];
+    void (^addSuite)(XCTestSuite *) = ^(XCTestSuite *candidate) {
+        // The reference's add-candidate block asks each candidate for its name
+        // and drops the ones without one. Every candidate built here has a
+        // name, and following the reference to the letter would empty the
+        // container, so the name is the merge key instead: two candidates with
+        // the same name are one suite, and the later one's tests join the
+        // first's. A candidate that cannot be named still has no key to merge
+        // under and is dropped.
+        NSString *name = candidate.name;
+        if (name == nil) {
+            return;
+        }
+        XCTestSuite *existing = namedSuites[name];
+        if (existing == nil) {
+            namedSuites[name] = candidate;
+            [containerSuite addTest:candidate];
+            return;
+        }
+        // The class arrived twice -- selected whole and selected by a method of
+        // it -- so the same test may stand in both suites. A container that
+        // held it twice would run it twice, so each of the candidate's tests
+        // joins only when the suite does not already hold an equal identifier.
+        // A test with no identifier cannot be compared, and is added rather
+        // than dropped: losing a real test is the worse of the two errors.
+        NSMutableSet<XCTTestIdentifier *> *held = [NSMutableSet set];
+        for (XCTest *test in existing.tests) {
+            XCTTestIdentifier *identifier = [test _xctTestIdentifier];
+            if (identifier != nil) {
+                [held addObject:identifier];
+            }
+        }
+        for (XCTest *test in candidate.tests) {
+            XCTTestIdentifier *identifier = [test _xctTestIdentifier];
+            if (identifier != nil && [held containsObject:identifier]) {
+                continue;
+            }
+            [existing addTest:test];
+        }
+    };
+
+    // Whole classes first: a class's default suite is the broadest thing it
+    // contributes, and a more specific suite for the same class merges into it.
+    for (Class testCaseClass in wholeClasses) {
+        if (![testCaseClass respondsToSelector:@selector(defaultTestSuite)]) {
+            continue;
+        }
+        XCTestSuite *suite = [testCaseClass defaultTestSuite];
+        if (![suite shouldIncludeWhenIncludingEmptySuites]) {
+            continue;
+        }
+        addSuite(suite);
+    }
+
+// Classes with specific tests, resolved from the identifiers each was
+    // grouped under. Grouping already proved each name resolves to a class;
+    // resolving it again is the only way back from the name it keyed by.
+    // _constructTestSuiteForTestCaseClass: answers nil when a selection matches
+    // nothing in a class's own suite, and the merge drops it the way it drops
+    // an unnameable candidate.
+    for (NSString *className in classesToIdentifiers) {
+        Class testCaseClass = NSClassFromString(className);
+        if (testCaseClass == Nil) {
+            continue;
+        }
+        addSuite([XCTestSuite _constructTestSuiteForTestCaseClass:testCaseClass
+                                       testIdentifiersToRun:classesToIdentifiers[className]]);
+    }
+}
+
++ (void)groupTestIdentifiers:(XCTTestIdentifierSet *)identifiers
+                 intoClasses:(NSMutableSet<Class> **)wholeClassIdentifiersOut
+    andTestMethodIdentifiers:(NSMutableDictionary<NSString *, XCTTestIdentifierSet *> **)classesToIdentifiersOut
+{
+    NSMutableSet<Class> *wholeClasses = [NSMutableSet set];
+    // A second map holds the build-up, one builder per class name; the map sent
+    // out is the finished one, a set of identifiers per class. Both keyed by
+    // the name as the identifier spelled it: this platform's NSMapTable offers
+    // only its legacy C interface, and the name round-trips through
+    // NSClassFromString, which grouping does anyway to prove the class exists.
+    NSMutableDictionary<NSString *, XCTTestIdentifierSetBuilder *> *builders =
+        [NSMutableDictionary dictionary];
+    for (XCTTestIdentifier *identifier in identifiers) {
+        // Only a class/method-shaped identifier has a first component that is a
+        // class name at all; anything else is skipped rather than guessed at.
+        if (!identifier.usesClassAndMethodSemantics || identifier.componentCount == 0) {
+            continue;
+        }
+        NSString *className = identifier.firstComponent;
+        Class testCaseClass = NSClassFromString(className);
+        if (testCaseClass == Nil) {
+            // A selection can name a class that is not loaded in this process;
+            // there is no class to group the identifier under, and no code
+            // should try to build for it later.
+            continue;
+        }
+        if (identifier.componentCount == 1) {
+            // A bare class name runs the whole class.
+            [wholeClasses addObject:testCaseClass];
+            continue;
+        }
+        // A class/method pair: accumulated under its class for resolution.
+        XCTTestIdentifierSetBuilder *builder = builders[className];
+        if (builder == nil) {
+            builder = [[XCTTestIdentifierSetBuilder alloc] init];
+            builders[className] = builder;
+        }
+        [builder addTestIdentifier:identifier];
+    }
+    if (wholeClassIdentifiersOut != NULL) {
+        *wholeClassIdentifiersOut = wholeClasses;
+    }
+    if (classesToIdentifiersOut != NULL) {
+        NSMutableDictionary<NSString *, XCTTestIdentifierSet *> *classesToIdentifiers =
+            [NSMutableDictionary dictionary];
+        for (NSString *className in builders) {
+            XCTTestIdentifierSetBuilder *builder = builders[className];
+            classesToIdentifiers[className] = builder.testIdentifierSet;
+        }
+        *classesToIdentifiersOut = classesToIdentifiers;
+    }
+}
+
++ (NSDictionary<NSString *, XCTestSuite *> *)suitesForBundlesIncludingEmptySuites:(BOOL)includeEmptySuites
+{
+    // Nobody in this port asks for YES; in the reference it is the
+    // crash-restart restore path, where its -shouldIncludeWhenIncludingEmptySuites:
+    // answers NO for every suite and nothing is retained. Matched rather than
+    // "fixed": the empty answer is the reference's, and inventing another is
+    // the only thing that could be wrong here.
+    if (includeEmptySuites) {
+        return @{};
+    }
+    NSString *outerBundlePath = [[NSBundle bundleForClass:[XCTest class]] bundlePath];
+    NSMutableDictionary<NSString *, XCTestSuite *> *suites = [NSMutableDictionary dictionary];
+    for (Class testCaseClass in [XCTestCase allSubclasses]) {
+        NSString *bundlePath = [[NSBundle bundleForClass:testCaseClass] bundlePath];
+        // The framework's own classes are the machinery, not a test bundle, and
+        // are left out the way the reference's -xct_bundlePathForTestSuite
+        // leaves the framework's own bundle out of the scan.
+        if (bundlePath == nil || [bundlePath isEqualToString:outerBundlePath]) {
+            continue;
+        }
+        XCTestSuite *suite = [testCaseClass defaultTestSuite];
+        if (![suite shouldIncludeWhenIncludingEmptySuites]) {
+            continue;
+        }
+        XCTestSuite *bundleSuite = suites[bundlePath];
+        if (bundleSuite == nil) {
+            // A bundle's own suite is named from its path, which is the whole
+            // of the reference's +emptyTestSuiteNamedFromPath:.
+            bundleSuite = [XCTestSuite testSuiteWithName:bundlePath.lastPathComponent ?: bundlePath];
+            suites[bundlePath] = bundleSuite;
+        }
+        [bundleSuite addTest:suite];
+    }
+    return suites;
 }
 
 #pragma mark - Default suite
