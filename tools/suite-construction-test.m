@@ -557,6 +557,58 @@ static NSUInteger ActivityObserverOrder = 0;
 }
 @end
 
+// Conforms to the reporting protocol one level above _XCTestObservationPrivate,
+// so registration places it in the internal, the private and the public lists.
+// It records both skip callbacks: the case-level one it inherits from the
+// private protocol and the suite-level one declared directly on this protocol.
+@interface SkipObserverFixture : NSObject <_XCTestObservationInternal>
+@property (nonatomic) NSUInteger caseSkipCount;
+@property (nonatomic) NSUInteger suiteSkipCount;
+@property (nonatomic) XCTestCase *skippedCase;
+@property (nonatomic) NSString *skippedCaseDescription;
+@property (nonatomic) XCTSourceCodeContext *skippedCaseContext;
+@property (nonatomic) XCTestSuite *skippedSuite;
+@property (nonatomic) NSString *skippedSuiteDescription;
+@property (nonatomic) XCTSourceCodeContext *skippedSuiteContext;
+@end
+
+@implementation SkipObserverFixture
+- (void)testCase:(XCTestCase *)testCase
+    didRecordSkipWithDescription:(NSString *)description
+              sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext
+{
+    self.caseSkipCount++;
+    self.skippedCase = testCase;
+    self.skippedCaseDescription = description;
+    self.skippedCaseContext = sourceCodeContext;
+}
+- (void)testSuite:(XCTestSuite *)testSuite
+    didRecordSkipWithDescription:(NSString *)description
+              sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext
+{
+    self.suiteSkipCount++;
+    self.skippedSuite = testSuite;
+    self.skippedSuiteDescription = description;
+    self.skippedSuiteContext = sourceCodeContext;
+}
+@end
+
+// Private protocol only: the case-level skip is declared on the protocol this
+// conforms to, so it must arrive here; the suite-level one is declared above it,
+// so it must not.
+@interface PrivateSkipObserverFixture : NSObject <_XCTestObservationPrivate>
+@property (nonatomic) NSUInteger caseSkipCount;
+@end
+
+@implementation PrivateSkipObserverFixture
+- (void)testCase:(XCTestCase *)testCase
+    didRecordSkipWithDescription:(NSString *)description
+              sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext
+{
+    self.caseSkipCount++;
+}
+@end
+
 #pragma mark - Runtime facts
 
 static void testRuntimeFacts(void)
@@ -2465,6 +2517,143 @@ static void testPlaceholderObservation(void)
     [center removeTestObserver:privateOnly];
 }
 
+static void testSkipObservation(void)
+{
+    // A skip is recorded on a run and then broadcast: the run's own override
+    // does the bookkeeping through -super and reports the result. The case-level
+    // callback is declared on _XCTestObservationPrivate and the suite-level one
+    // a protocol above it, so the checks below pin both the delivery and the
+    // list the two are routed through.
+    printf("test skip reporting\n");
+
+    XCTestObservationCenter *center = [XCTestObservationCenter sharedTestObservationCenter];
+
+    SkipObserverFixture *observer = [[SkipObserverFixture alloc] init];
+    PrivateSkipObserverFixture *privateOnly = [[PrivateSkipObserverFixture alloc] init];
+    [center addTestObserver:observer];
+    [center addTestObserver:privateOnly];
+
+    ok("a skip observer is registered for the internal protocol",
+       [center.internalObservers containsObject:observer], nil);
+    ok("a skip observer is registered for the private protocol too",
+       [center.privateObservers containsObject:observer], nil);
+
+    XCTSourceCodeContext *context = (XCTSourceCodeContext *)@"context";
+
+    // A case run records a skip on itself; the base marks it skipped, and only
+    // then does the override tell the private observers.
+    XCTestCase *aCase =
+        [XCTSuiteConstructionPlainFixture testCaseWithSelector:@selector(testExample)];
+    XCTestCaseRun *caseRun = [[XCTestCaseRun alloc] initWithTest:aCase];
+    [caseRun start];
+    [caseRun recordSkipWithDescription:@"not today" sourceCodeContext:context];
+
+    ok("recording a case skip marks the run skipped", caseRun.hasBeenSkipped, nil);
+    ok("a case skip reaches the case callback", observer.caseSkipCount == 1, nil);
+    ok("a case skip is reported against the run's test case",
+       observer.skippedCase == aCase, nil);
+    ok("a case skip carries the description it was given",
+       [observer.skippedCaseDescription isEqualToString:@"not today"], nil);
+    ok("a case skip carries the source context it was given",
+       observer.skippedCaseContext == context, nil);
+    ok("a case skip reaches a private-only observer",
+       privateOnly.caseSkipCount == 1, nil);
+    ok("a case skip does not reach the suite callback",
+       observer.suiteSkipCount == 0, nil);
+
+    // A suite run records one level up; the private-only observer, which does
+    // not conform to the protocol that declares this callback, must not see it.
+    XCTestSuite *aSuite =
+        [XCTestSuite testSuiteForTestCaseClass:[XCTSuiteConstructionPlainFixture class]];
+    XCTestSuiteRun *suiteRun = [[XCTestSuiteRun alloc] initWithTest:aSuite];
+    [suiteRun start];
+    [suiteRun recordSkipWithDescription:@"whole class skipped" sourceCodeContext:context];
+
+    ok("recording a suite skip marks the run skipped", suiteRun.hasBeenSkipped, nil);
+    ok("a suite skip reaches the suite callback", observer.suiteSkipCount == 1, nil);
+    ok("a suite skip is reported against the run's suite",
+       observer.skippedSuite == aSuite, nil);
+    ok("a suite skip carries the description it was given",
+       [observer.skippedSuiteDescription isEqualToString:@"whole class skipped"], nil);
+    ok("a suite skip carries the source context it was given",
+       observer.skippedSuiteContext == context, nil);
+    ok("a suite skip does not reach a private-only observer",
+       privateOnly.caseSkipCount == 1, nil);
+
+    // The base bookkeeping still guards the report: a run that never started,
+    // and one already stopped, each refuse -- and a refusal never reaches an
+    // observer.
+    observer.caseSkipCount = 0;
+    XCTestCaseRun *unstarted = [[XCTestCaseRun alloc] initWithTest:aCase];
+    BOOL raised = NO;
+    @try {
+        [unstarted recordSkipWithDescription:@"too soon" sourceCodeContext:context];
+    } @catch (NSException *exception) {
+        raised = YES;
+    }
+    ok("a skip on a run that has not started is refused", raised, nil);
+    ok("a refused skip never reaches an observer",
+       observer.caseSkipCount == 0, nil);
+
+    XCTestCaseRun *stopped = [[XCTestCaseRun alloc] initWithTest:aCase];
+    [stopped start];
+    [stopped stop];
+    raised = NO;
+    @try {
+        [stopped recordSkipWithDescription:@"too late" sourceCodeContext:context];
+    } @catch (NSException *exception) {
+        raised = YES;
+    }
+    ok("a skip on a stopped run is refused", raised, nil);
+
+    // A case or suite run whose test is the wrong kind for the event it reports
+    // is the reporting layer against itself. The refusal carries the reference's
+    // own text, matched by the run's test rather than just the exception name.
+    XCTestSuite *notACase = [XCTestSuite testSuiteWithName:@"NotACase"];
+    XCTestCaseRun *oddCaseRun = [[XCTestCaseRun alloc] initWithTest:notACase];
+    [oddCaseRun start];
+    raised = NO;
+    NSString *refusal = nil;
+    @try {
+        [oddCaseRun recordSkipWithDescription:@"surprise" sourceCodeContext:context];
+    } @catch (NSException *exception) {
+        raised = YES;
+        refusal = exception.reason;
+    }
+    ok("a case run whose test is not a case is refused", raised, refusal);
+    ok("the refusal names the run's test",
+       [refusal rangeOfString:@"Reported test case event for non-test case object"].location != NSNotFound,
+       refusal);
+
+    XCTestSuiteRun *oddSuiteRun = [[XCTestSuiteRun alloc] initWithTest:aCase];
+    [oddSuiteRun start];
+    raised = NO;
+    refusal = nil;
+    @try {
+        [oddSuiteRun recordSkipWithDescription:@"surprise" sourceCodeContext:context];
+    } @catch (NSException *exception) {
+        raised = YES;
+        refusal = exception.reason;
+    }
+    ok("a suite run whose test is not a suite is refused", raised, refusal);
+    ok("the refusal names the run's test",
+       [refusal rangeOfString:@"Reported test suite event for non-suite test object"].location != NSNotFound,
+       refusal);
+
+    // A run with no test is the one case-level shape that cannot be checked, so
+    // it is reported rather than refused -- the same allowance the placeholder
+    // broadcast makes.
+    observer.caseSkipCount = 0;
+    [center _testCaseWasSkipped:(XCTestCaseRun *)[[NilTestRun alloc] init]
+                withDescription:@"no test"
+              sourceCodeContext:context];
+    ok("a case skip from a run with no test is reported without refusal",
+       observer.caseSkipCount == 1, nil);
+
+    [center removeTestObserver:observer];
+    [center removeTestObserver:privateOnly];
+}
+
 void testActivityRecord(void)
 {
     // These are about the recovered semantics rather than about the plumbing: a
@@ -3665,6 +3854,7 @@ int main(void)
     testActivityReportingFilter();
     testActivityObservation();
     testPlaceholderObservation();
+    testSkipObservation();
     testActivityRecord();
     testConfigurationConstruction();
     printf("\n%d check%s failed\n", failures, failures == 1 ? "" : "s");

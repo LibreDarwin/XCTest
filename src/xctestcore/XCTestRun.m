@@ -394,6 +394,27 @@ static void _XCTRaiseAssertionFailure(NSString *description)
     return self;
 }
 
+/// Broadcasts the skip once the base class has recorded it.
+///
+/// The base class owns the bookkeeping -- it sets -hasBeenSkipped and rejects
+/// the reports that cannot become a skip -- so the observer is told only after
+/// that has succeeded. The description and context are forwarded untouched:
+/// unlike the placeholder path they are not the reason a test was unavailable,
+/// they are the message and source location of the test that skipped itself.
+/// A case run reaches this even for a subclass whose test is not an XCTestCase;
+/// the observation center asserts on that rather than this path second-guessing
+/// it, so the check lives in exactly one place.
+- (void)recordSkipWithDescription:(NSString *)description
+               sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext
+{
+    [super recordSkipWithDescription:description
+                   sourceCodeContext:sourceCodeContext];
+    [[XCTestObservationCenter sharedTestObservationCenter]
+        _testCaseWasSkipped:self
+            withDescription:description
+          sourceCodeContext:sourceCodeContext];
+}
+
 @end
 
 #pragma mark - XCTestSuiteRun
@@ -445,6 +466,21 @@ static void _XCTRaiseAssertionFailure(NSString *description)
     self.failureCount = failureCount;
     self.unexpectedExceptionCount = unexpectedExceptionCount;
     self.hasBeenSkipped = hasBeenSkipped;
+}
+
+/// Broadcasts the skip once the base class has recorded it, one level above the
+/// case-level callback -[XCTestCaseRun recordSkipWithDescription:
+/// sourceCodeContext:] dispatches. The run, not its test, is what the observer
+/// is told about; the same forwarding of description and context applies.
+- (void)recordSkipWithDescription:(NSString *)description
+               sourceCodeContext:(XCTSourceCodeContext *)sourceCodeContext
+{
+    [super recordSkipWithDescription:description
+                   sourceCodeContext:sourceCodeContext];
+    [[XCTestObservationCenter sharedTestObservationCenter]
+        _testSuiteWasSkipped:self
+            withDescription:description
+          sourceCodeContext:sourceCodeContext];
 }
 
 @end

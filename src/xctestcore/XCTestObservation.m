@@ -374,6 +374,59 @@ static void _XCTRaiseAssertionFailure(NSString *description)
     }];
 }
 
+/// Reports a case run's skip to the observers watching case-level events.
+///
+/// The run is the subject, not the test: the observer is told which run is now
+/// skipped, and reads the test it ran from -[XCTestRun test]. A run whose test
+/// is neither nil nor an XCTestCase is a caller reporting an event only a case
+/// run produces, so it asserts; the nil case is let through because there is
+/// nothing to check it against, which is the same allowance the placeholder
+/// broadcast above makes.
+- (void)_testCaseWasSkipped:(XCTestCaseRun *)run
+            withDescription:(NSString *)description
+          sourceCodeContext:(nullable XCTSourceCodeContext *)sourceCodeContext
+{
+    XCTest *test = [run test];
+    if (test != nil && ![test isKindOfClass:[XCTestCase class]]) {
+        _XCTRaiseAssertionFailure([NSString stringWithFormat:
+            @"Reported test case event for non-test case object %@", test]);
+    }
+
+    [self _performBlockOnObservers:self.privateObservers
+             respondingToSelector:@selector(testCase:didRecordSkipWithDescription:sourceCodeContext:)
+                          reverse:NO
+                             block:^(id<_XCTestObservationPrivate> observer) {
+        [observer testCase:(XCTestCase *)test
+            didRecordSkipWithDescription:description
+                     sourceCodeContext:sourceCodeContext];
+    }];
+}
+
+/// Reports a suite run's skip to the internal observers.
+///
+/// Unlike the case-level broadcast above there is no nil exception: a suite run
+/// always ran a suite, so a nil or non-suite test is equally a caller reporting
+/// an event the run cannot produce, and the reference asserts for both.
+- (void)_testSuiteWasSkipped:(XCTestSuiteRun *)run
+             withDescription:(NSString *)description
+           sourceCodeContext:(nullable XCTSourceCodeContext *)sourceCodeContext
+{
+    XCTest *test = [run test];
+    if (![test isKindOfClass:[XCTestSuite class]]) {
+        _XCTRaiseAssertionFailure([NSString stringWithFormat:
+            @"Reported test suite event for non-suite test object %@", test]);
+    }
+
+    [self _performBlockOnObservers:self.internalObservers
+             respondingToSelector:@selector(testSuite:didRecordSkipWithDescription:sourceCodeContext:)
+                          reverse:NO
+                             block:^(id<_XCTestObservationInternal> observer) {
+        [observer testSuite:(XCTestSuite *)test
+            didRecordSkipWithDescription:description
+                     sourceCodeContext:sourceCodeContext];
+    }];
+}
+
 - (void)testBundleWillStart:(NSBundle *)testBundle
 {
     [self _broadcast:@selector(testBundleWillStart:) subject:testBundle];

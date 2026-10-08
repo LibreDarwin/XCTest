@@ -19,6 +19,10 @@ NS_ASSUME_NONNULL_BEGIN
 @class XCTestSuite;
 @class XCTIssue;
 @class XCTExpectedFailure;
+// Run classes, named only as the subject of a skip broadcast and forwarded to
+// an observer, so a forward declaration is enough.
+@class XCTestCaseRun;
+@class XCTestSuiteRun;
 // Private classes, so only ever named as an argument that is forwarded to an
 // observer; a forward declaration is enough and keeps this header free of the
 // private header that defines them.
@@ -45,8 +49,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_context:(XCTContext *)context
     didFinishActivity:(XCActivityRecord *)activity;
 
-/// Declared for completeness: the reference declares it on the same protocol.
-/// Nothing reports a skip yet, so there is no sender for it here.
+/// Reported by -[XCTestObservationCenter _testCaseWasSkipped:withDescription:
+/// sourceCodeContext:], which a case run reaches from its
+/// -recordSkipWithDescription:sourceCodeContext: override.
 - (void)testCase:(XCTestCase *)testCase
     didRecordSkipWithDescription:(NSString *)description
                  sourceCodeContext:(nullable XCTSourceCodeContext *)sourceCodeContext;
@@ -63,9 +68,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @optional
 
-/// Declared for completeness: the reference declares it on this protocol, above
-/// the case-level skip it inherits. Nothing reports a suite skip yet, so there
-/// is no sender for it here.
+/// Reported by -[XCTestObservationCenter _testSuiteWasSkipped:withDescription:
+/// sourceCodeContext:], which a suite run reaches from its
+/// -recordSkipWithDescription:sourceCodeContext: override.
 - (void)testSuite:(XCTestSuite *)testSuite
     didRecordSkipWithDescription:(NSString *)description
                  sourceCodeContext:(nullable XCTSourceCodeContext *)sourceCodeContext;
@@ -93,6 +98,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)testCaseWillStart:(XCTestCase *)testCase;
 - (void)testCaseDidFinish:(XCTestCase *)testCase;
 - (void)testCase:(XCTestCase *)testCase didRecordIssue:(XCTIssue *)issue;
+
+/// Routes a case run's recorded skip to the private observers. Dispatched from
+/// -[XCTestCaseRun recordSkipWithDescription:sourceCodeContext:] after the run
+/// has set -hasBeenSkipped, so an observer that acts on it sees the run already
+/// marked.
+- (void)_testCaseWasSkipped:(XCTestCaseRun *)run
+            withDescription:(NSString *)description
+          sourceCodeContext:(nullable XCTSourceCodeContext *)sourceCodeContext;
+
+/// Routes a suite run's recorded skip to the internal observers, one level
+/// above the case-level callback above.
+- (void)_testSuiteWasSkipped:(XCTestSuiteRun *)run
+             withDescription:(NSString *)description
+           sourceCodeContext:(nullable XCTSourceCodeContext *)sourceCodeContext;
 - (void)testCase:(XCTestCase *)testCase
     didRecordExpectedFailure:(XCTExpectedFailure *)expectedFailure;
 
